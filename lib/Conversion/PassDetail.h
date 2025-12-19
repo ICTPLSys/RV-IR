@@ -22,5 +22,11 @@ namespace torch {
 
 } // namespace torch
 } // end namespace mlir
+// namespace riscv {
+
+// #define GEN_PASS_CLASSES
+// #include "torch-mlir/Conversion/Passes.h.inc"
+
+// } // end namespace riscv
 
 #endif // TORCHMLIR_CONVERSION_PASSDETAIL_H

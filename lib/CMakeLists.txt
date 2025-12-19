@@ -15,11 +15,19 @@ set(LinkedLibs
   MLIRTensorDialect
   MLIRTensorInferTypeOpInterfaceImpl
   MLIRSupport
+  MLIRAffineToStandard
+  MLIRSCFToControlFlow
+  MLIRArithToLLVM
+  MLIRMemRefToLLVM
+  MLIRControlFlowToLLVM
+  MLIRFuncToLLVM
 
   # Dialects.
   TorchMLIRTMTensorDialect
   TorchMLIRTorchDialect
   TorchMLIRTorchConversionDialect
+  MLIRRISCVDialect
+  MLIRCIMDialect
 
   # Dialect passes.
   TorchMLIRTMTensorPasses
@@ -29,6 +37,11 @@ set(LinkedLibs
   # Conversion passes.
   TorchMLIRConversionPasses
   TorchMLIRTorchOnnxToTorch
+  MLIRLinalgToRISCV
+  MLIRRISCVToAffine
+  MLIRRISCVToLLVM
+  MLIRRISCVToCIM
+
 )
 
 if(TORCH_MLIR_ENABLE_STABLEHLO)

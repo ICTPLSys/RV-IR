@@ -83,11 +83,11 @@ void Torch::printTorchDialectType(Type type, AsmPrinter &printer) {
 // Torch dialect parseType/printType methods.
 //===----------------------------------------------------------------------===//
 
-/// Parse a type registered to this dialect.
+// Parse a type registered to this dialect.
 Type TorchDialect::parseType(DialectAsmParser &parser) const {
   return parseTorchDialectType(parser);
 }
-/// Print a type registered to this dialect.
+// Print a type registered to this dialect.
 void TorchDialect::printType(Type type, DialectAsmPrinter &printer) const {
   printTorchDialectType(type, printer);
 }

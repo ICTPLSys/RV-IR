@@ -16,6 +16,7 @@ include "mlir/Pass/PassBase.td"
 // Torch conversions
 //===----------------------------------------------------------------------===//
 
+
 def ConvertTorchToArith : Pass<"convert-torch-to-arith", "func::FuncOp"> {
   let summary = "Convert recognized Torch ops to Std ops";
   let constructor = "mlir::torch::createConvertTorchToArithPass()";
@@ -171,5 +172,40 @@ def ConvertTorchToStablehlo : Pass<"convert-torch-to-stablehlo", "func::FuncOp">
   ];
 }
 #endif
+
+//===----------------------------------------------------------------------===//
+// RISCV conversions
+//===----------------------------------------------------------------------===//
+
+// def ConvertLinalgToRISCVPass : Pass<"convert-linalg-to-riscv", operation="func::FuncOp"> {
+//     let summary = "Convert linalg to riscv dialect";
+//     let constructor = "riscv::createLowerLinalgToRISCVPass()";
+//     let dependentDialects = [ "riscv::RISCVDialect", "tensor::TensorDialect"];
+// }
+
+// def ConvertCimToRiscvAffinePass : Pass<"convert-riscv-to-affine", operation="func::FuncOp"> {
+//     let summary = "Convert RISC-V dialect to Affine dialect";
+//     let constructor = "riscv::createLowerToAffinePass()";
+//     let dependentDialects = [
+//         "cim::CimDialect", 
+//         "riscv::RISCVDialect",
+//         "affine::AffineDialect",  
+//         "bufferization::BufferizationDialect", 
+//         "memref::MemRefDialect", 
+//         "tensor::TensorDialect"
+//     ];
+// }
+
+
+// def ConvertRiscvToLLVMPass : Pass<"convert-riscv-to-llvm", operation="func::FuncOp"> {
+//     let summary = "Convert RISC-V dialect to LLVM dialect";
+//     let constructor = "riscv::createLowerToLLVMPass()";
+//     let dependentDialects = [
+//         "riscv::RISCVDialect",
+//         "llvm::LLVMDialect",  
+//         "func::FuncDialect",
+//         "memref::MemRefDialect"
+//     ];
+// }
 
 #endif // TORCHMLIR_CONVERSION_PASSES

@@ -15,6 +15,17 @@ target_link_libraries(torch-mlir-opt PRIVATE
   MLIRTransforms
   TorchMLIRInitAll
   TorchMLIRTorchDialect
+  MLIRRISCVDialect
+  MLIRCIMDialect
+  MLIRLinalgToRISCV
+  MLIRRISCVToAffine
+  MLIRRISCVToLLVM
+  MLIRAffineToStandard
+  MLIRSCFToControlFlow
+  MLIRArithToLLVM
+  MLIRMemRefToLLVM
+  MLIRControlFlowToLLVM
+  MLIRFuncToLLVM
   TorchMLIRTorchPasses
   ${dependency_libraries}
 )

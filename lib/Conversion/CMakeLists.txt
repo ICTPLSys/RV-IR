@@ -3,6 +3,14 @@ add_subdirectory(TorchToArith)
 add_subdirectory(TorchToLinalg)
 add_subdirectory(TorchToSCF)
 add_subdirectory(TorchToTensor)
+
+add_subdirectory(LinalgToRISCV)
+add_subdirectory(RISCVToAffine)
+add_subdirectory(RISCVToLLVM)
+add_subdirectory(RISCVToCIM)
+add_subdirectory(CIMToLLVM)
+
+
 if(TORCH_MLIR_ENABLE_TOSA)
   add_subdirectory(TorchToTosa)
 endif()
@@ -20,7 +28,13 @@ set(linked_libs TorchMLIRTorchToArith
                 TorchMLIRTorchToTensor
                 TorchMLIRTorchToTMTensor
                 TorchMLIRTorchConversionToMLProgram
-                TorchMLIRConversionUtils)
+                TorchMLIRConversionUtils
+                MLIRLinalgToRISCV
+                MLIRRISCVToAffine
+                MLIRRISCVToLLVM
+                MLIRRISCVToCIM
+                MLIRCIMToLLVM
+                )
 if(TORCH_MLIR_ENABLE_STABLEHLO)
   list(APPEND linked_libs TorchMLIRTorchToStablehlo)
 endif()
@@ -37,3 +51,4 @@ add_mlir_library(TorchMLIRConversionPasses
   LINK_LIBS PUBLIC
   ${linked_libs}
 )
+

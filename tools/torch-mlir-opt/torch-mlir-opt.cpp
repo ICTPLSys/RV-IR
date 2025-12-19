@@ -14,6 +14,9 @@
 #include "mlir/Transforms/Passes.h"
 #include "torch-mlir/InitAll.h"
 
+// #include "torch-mlir/Conversion/RISCVPasses.h"
+// #include "torch-mlir/Dialect/RISCV/IR/RISCVDialect.h"
+
 #ifdef TORCH_MLIR_ENABLE_STABLEHLO
 #include "stablehlo/dialect/Register.h"
 #endif
@@ -42,6 +45,9 @@ int main(int argc, char **argv) {
   mlir::torch::registerAllDialects(registry);
   mlir::torch::registerAllExtensions(registry);
   mlir::torch::registerOptionalInputDialects(registry);
+
+  // riscv::registerRISCVConversionPasses();
+
 
 #ifdef TORCH_MLIR_ENABLE_STABLEHLO
   mlir::stablehlo::registerAllDialects(registry);
