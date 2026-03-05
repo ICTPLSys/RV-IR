@@ -1,6 +1,6 @@
-// RUN: torch-mlir-opt <%s --convert-riscv-to-affine --convert-riscv-to-llvm  %s | FileCheck %s
+// RUN: torch-mlir-opt <%s --convert-riscv-to-cim %s | FileCheck %s
 
-// CHECK: llvm.func @load()
+// CHECK: call @llvm.riscv.load(%{{.*}}, %{{.*}}) : (i32, i32) -> i32  
 func.func @load() {
   %c0 = arith.constant 0 : index
   %c16 = arith.constant 16 : index

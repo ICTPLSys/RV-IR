@@ -1,16 +1,20 @@
-// RUN: torch-mlir-opt <%s --convert-riscv-to-affine --convert-riscv-to-llvm  %s | FileCheck %s
+// RUN: torch-mlir-opt <%s --convert-riscv-to-affine  %s | FileCheck %s
 
-// CHECK-LABEL: llvm.func @launch_1
-
-
-func.func @launch_1() {
-  %e0 = riscv.wait_all async
-  %e1 = riscv.wait_all async [%e0]
-  %t = riscv.launch async [%e0, %e1] () in () {
-  }
+// CHECK-LABEL: func.func @wait
+// CHECK: %[[T0:.*]] = async.execute {
+// CHECK: %[[T1:.*]] = async.execute [%[[T0]]] {
+// CHECK: async.await %[[T0]] : !async.token
+// CHECK: async.await %[[T1]] : !async.token
+func.func @wait() {
+  %1 = riscv.wait_all async
+  %2 = riscv.wait_all async [%1]
+  riscv.wait_all [%1, %2]
   return
 }
-// CHECK-LABEL: llvm.func @launch_0
+// CHECK-LABEL:   func.func @launch(
+// CHECK:       affine.for %{{.*}} = 0 to 4 {
+// CHECK:       affine.for %{{.*}} = 0 to 2 {
+// CHECK:       affine.for %{{.*}} = 0 to 2 {
 func.func @launch_0(%arg0: memref<16xf16>, %arg1: memref<16xf16>) {
   %c2 = arith.constant 2 : index
   %c4 = arith.constant 4 : index

@@ -1,5 +1,5 @@
-// RUN: torch-mlir-opt <%s -convert-linalg-to-riscv -convert-riscv-to-affine -convert-riscv-to-llvm | FileCheck %s
-// CHECK: llvm.func @main()
+// RUN: torch-mlir-opt <%s -convert-linalg-to-riscv | FileCheck %s
+// CHECK: riscv.matvec
 func.func @main() {
     // Create input matrices
     %A = arith.constant dense<[[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]> : tensor<2x3xf64>

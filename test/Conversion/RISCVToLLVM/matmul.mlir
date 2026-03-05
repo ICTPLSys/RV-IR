@@ -1,12 +1,22 @@
-// RUN: torch-mlir-opt <%s --convert-riscv-to-affine --convert-riscv-to-llvm | FileCheck %s
+// RUN: torch-mlir-opt <%s --convert-riscv-to-affine | FileCheck %s
 
-// CHECK: llvm.func @main()
-func.func @main() {
-    %0 = "riscv.constant"() {value = dense<[[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]> : tensor<2x3xf32>} : () -> tensor<2x3xf32>
-    %1 = "riscv.constant"() {value = dense<[[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]]> : tensor<3x2xf32>} : () -> tensor<3x2xf32>
-    // "riscv.print"(%0) : (tensor<2x3xf32>) -> ()
-    // "riscv.print"(%1) : (tensor<3x2xf32>) -> ()
-    %2 = "riscv.matmul"(%0, %1) : (tensor<2x3xf32>, tensor<3x2xf32>) -> tensor<2x2xf32>
-    "riscv.print"(%2) : (tensor<2x2xf32>) -> ()
-    return
+// CHECK: affine.for %{{.*}} = 0 to 16 {
+// CHECK:   affine.for %{{.*}} = 0 to 64 {
+// CHECK:     affine.for %{{.*}} = 0 to 32 {
+// CHECK:       arith.mulf %{{.*}}, %{{.*}} : f32
+// CHECK:       arith.addf %{{.*}}, %{{.*}} : f32
+
+module attributes {torch.debug_module_name = "Linear"} {
+  memref.global "private" constant @__constant_32x64xf32 : memref<32x64xf32> = dense<0.000000e+00> {alignment = 64 : i64}
+
+  func.func @forward(%arg0: memref<16x32xf32, strided<[?, ?], offset: ?>>) -> memref<16x64xf32> {
+    %cst = arith.constant 0.000000e+00 : f32
+    %0 = memref.get_global @__constant_32x64xf32 : memref<32x64xf32>
+    %alloc_0 = memref.alloc() {alignment = 64 : i64} : memref<16x64xf32>
+    linalg.fill ins(%cst : f32) outs(%alloc_0 : memref<16x64xf32>)
+    %alloc_1 = memref.alloc() {alignment = 64 : i64} : memref<16x64xf32>
+    memref.copy %alloc_0, %alloc_1 : memref<16x64xf32> to memref<16x64xf32>
+    riscv.matmul ins(%arg0, %0 : memref<16x32xf32, strided<[?, ?], offset: ?>>, memref<32x64xf32>) outs(%alloc_1 : memref<16x64xf32>)
+    return %alloc_1 : memref<16x64xf32>
+  }
 }

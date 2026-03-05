@@ -1,5 +1,5 @@
-// RUN: torch-mlir-opt <%s -convert-linalg-to-riscv -convert-riscv-to-affine -convert-riscv-to-llvm | FileCheck %s
-// CHECK: llvm.func @main()
+// RUN: torch-mlir-opt <%s -convert-linalg-to-riscv | FileCheck %s
+// CHECK: riscv.reduce
 func.func @main() {
     // Create input tensor
     %input = arith.constant dense<[

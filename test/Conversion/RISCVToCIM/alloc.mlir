@@ -1,7 +1,7 @@
-// RUN: torch-mlir-opt <%s --convert-riscv-to-affine  %s | FileCheck %s
+// RUN: torch-mlir-opt <%s --convert-riscv-to-cim  %s | FileCheck %s
 
-// CHECK: memref.alloc
-// CHECK: memref.dealloc
+// CHECK: call @__npu_mem_malloc
+// CHECK: call @__npu_mem_free
 func.func @alloc() {
   // %c0 = arith.constant 0 : index
   // %c16 = arith.constant 16 : index

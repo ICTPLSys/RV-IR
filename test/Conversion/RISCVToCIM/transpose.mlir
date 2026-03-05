@@ -1,9 +1,6 @@
-// RUN: torch-mlir-opt <%s --convert-riscv-to-affine | FileCheck %s
+// RUN: torch-mlir-opt <%s --convert-riscv-to-cim | FileCheck %s
 
-// CHECK: affine.for %{{.*}} = 0 to 512 {
-// CHECK:   affine.for %{{.*}} = 0 to 2048 {
-// CHECK:     affine.load %{{.*}}[%{{.*}}, %{{.*}}] : memref<512x2048xf32>
-// CHECK:     affine.store %{{.*}}, %{{.*}}[%{{.*}}, %{{.*}}] : memref<2048x512xf32>
+// CHECK: call @llvm.riscv.trans.drv(%{{.*}}) : (i32) -> i32    
 #map = affine_map<(d0, d1, d2) -> (d1, d2)>
 #map1 = affine_map<(d0, d1, d2) -> (d0, d1, d2)>
 module attributes {torch.debug_module_name = "Linear"} {
@@ -27,9 +24,3 @@ module attributes {torch.debug_module_name = "Linear"} {
     
   }
 }
-
-
-
-
-
-
