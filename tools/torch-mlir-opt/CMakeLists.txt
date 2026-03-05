@@ -18,6 +18,7 @@ target_link_libraries(torch-mlir-opt PRIVATE
   MLIRRISCVDialect
   MLIRCIMDialect
   MLIRLinalgToRISCV
+  MLIRLinalgToStandard
   MLIRRISCVToAffine
   MLIRRISCVToLLVM
   MLIRAffineToStandard
