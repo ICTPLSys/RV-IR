@@ -15,6 +15,7 @@ set(LinkedLibs
   MLIRTensorDialect
   MLIRTensorInferTypeOpInterfaceImpl
   MLIRSupport
+  MLIRLinalgToStandard
   MLIRAffineToStandard
   MLIRSCFToControlFlow
   MLIRArithToLLVM

@@ -19,6 +19,7 @@ add_mlir_conversion_library(MLIRRISCVToCIM
     MLIRTransformUtils
     MLIRReconcileUnrealizedCasts
     MLIRLLVMDialect
+    MLIRAsyncDialect
     MLIRRISCVDialect
     MLIRCIMDialect
     MLIRAffineToStandard

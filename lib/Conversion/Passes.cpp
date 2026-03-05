@@ -46,6 +46,8 @@ namespace {
 #include "torch-mlir/Conversion/RISCVPasses.h.inc"
 #define GEN_PASS_REGISTRATION
 #include "torch-mlir/Conversion/Passes.h.inc"
+#define GEN_PASS_DEF_LINALGBUFFERIZE
+#include "torch-mlir/Conversion/Passes.h.inc"
 
 
 } // end namespace

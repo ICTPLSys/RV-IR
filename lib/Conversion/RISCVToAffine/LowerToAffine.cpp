@@ -24,6 +24,7 @@
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Dialect/SCF/IR/SCF.h"
+#include "mlir/Dialect/Async/IR/Async.h"
 
 #include "mlir/Pass/Pass.h"
 #include "mlir/Transforms/DialectConversion.h"
@@ -369,75 +370,287 @@ class TensorConstantOpLowering : public mlir::OpRewritePattern<riscv::ConstantOp
 //===----------------------------------------------------------------------===//
 // ArithConstantOpLowering
 //===----------------------------------------------------------------------===//
-class ArithConstantOpLowering : public mlir::OpConversionPattern<mlir::arith::ConstantOp> {
-  using OpConversionPattern<mlir::arith::ConstantOp>::OpConversionPattern;
+// class ArithConstantOpLowering : public mlir::OpConversionPattern<mlir::arith::ConstantOp> {
+//   using OpConversionPattern<mlir::arith::ConstantOp>::OpConversionPattern;
+
+//   mlir::LogicalResult
+//   matchAndRewrite(mlir::arith::ConstantOp op, OpAdaptor adaptor,
+//                   mlir::ConversionPatternRewriter &rewriter) const final {
+//     // Only handle tensor constants that need conversion
+//     auto tensorType = llvm::dyn_cast<mlir::RankedTensorType>(op.getType());
+//     if (!tensorType)
+//       return rewriter.notifyMatchFailure(op, "not a tensor constant");
+
+//     // Get the constant value
+//     auto denseAttr = llvm::dyn_cast<mlir::DenseElementsAttr>(op.getValue());
+//     if (!denseAttr)
+//       return rewriter.notifyMatchFailure(op, "not a dense elements attr");
+
+//     // Create a memref allocation
+//     auto memrefType = convertTensorToMemRef(tensorType);
+//     auto alloc = insertAllocAndDealloc(memrefType, op.getLoc(), rewriter);
+
+//     // Copy the constant values into the memref
+//     auto shape = tensorType.getShape();
+//     SmallVector<int64_t, 4> indices(shape.size(), 0);
+    
+//     std::function<void(unsigned)> storeElements = [&](unsigned dim) {
+//       if (dim == shape.size()) {
+//         // We've reached the innermost dimension, store the value
+//         SmallVector<Value> indexValues;
+//         for (auto idx : indices) {
+//           indexValues.push_back(rewriter.create<mlir::arith::ConstantIndexOp>(
+//               op.getLoc(), idx));
+//         }
+        
+//         // Get the value at the current indices
+//         auto flatIndex = 0;
+//         auto strides = SmallVector<int64_t>(shape.size(), 1);
+//         for (int i = shape.size() - 2; i >= 0; --i) {
+//           strides[i] = strides[i + 1] * shape[i + 1];
+//         }
+//         for (size_t i = 0; i < indices.size(); ++i) {
+//           flatIndex += indices[i] * strides[i];
+//         }
+        
+//         auto elementAttr = denseAttr.getValues<mlir::Attribute>()[flatIndex];
+//         auto typedAttr = llvm::cast<mlir::TypedAttr>(elementAttr);
+//         auto elementValue = rewriter.create<mlir::arith::ConstantOp>(
+//             op.getLoc(), typedAttr);
+        
+//         // Store the value
+//         rewriter.create<mlir::affine::AffineStoreOp>(
+//             op.getLoc(), elementValue, alloc, indexValues);
+//         return;
+//       }
+      
+//       // Iterate over the current dimension
+//       for (int64_t i = 0; i < shape[dim]; ++i) {
+//         indices[dim] = i;
+//         storeElements(dim + 1);
+//       }
+//     };
+    
+//     storeElements(0);
+    
+//     // Replace the tensor constant with the memref
+//     rewriter.replaceOp(op, alloc);
+//     return mlir::success();
+//   }
+// };
+struct ArithConstantOpLowering
+    : public mlir::OpConversionPattern<mlir::arith::ConstantOp> {
+  using OpConversionPattern::OpConversionPattern;
 
   mlir::LogicalResult
   matchAndRewrite(mlir::arith::ConstantOp op, OpAdaptor adaptor,
                   mlir::ConversionPatternRewriter &rewriter) const final {
-    // Only handle tensor constants that need conversion
+    // 只处理 tensor 常量
     auto tensorType = llvm::dyn_cast<mlir::RankedTensorType>(op.getType());
     if (!tensorType)
-      return rewriter.notifyMatchFailure(op, "not a tensor constant");
+      return rewriter.notifyMatchFailure(op, "not a ranked tensor constant");
 
-    // Get the constant value
-    auto denseAttr = llvm::dyn_cast<mlir::DenseElementsAttr>(op.getValue());
-    if (!denseAttr)
-      return rewriter.notifyMatchFailure(op, "not a dense elements attr");
-
-    // Create a memref allocation
+    auto valueAttr = op.getValue();
     auto memrefType = convertTensorToMemRef(tensorType);
-    auto alloc = insertAllocAndDealloc(memrefType, op.getLoc(), rewriter);
+    auto loc = op.getLoc();
 
-    // Copy the constant values into the memref
-    auto shape = tensorType.getShape();
-    SmallVector<int64_t, 4> indices(shape.size(), 0);
-    
-    std::function<void(unsigned)> storeElements = [&](unsigned dim) {
-      if (dim == shape.size()) {
-        // We've reached the innermost dimension, store the value
-        SmallVector<Value> indexValues;
-        for (auto idx : indices) {
-          indexValues.push_back(rewriter.create<mlir::arith::ConstantIndexOp>(
-              op.getLoc(), idx));
+    // DenseElementsAttr（IR 内联小常量）
+    if (auto dense =
+            llvm::dyn_cast<mlir::DenseElementsAttr>(valueAttr)) {
+      auto alloc = insertAllocAndDealloc(memrefType, loc, rewriter);
+
+      auto shape = tensorType.getShape();
+      SmallVector<int64_t, 4> indices(shape.size(), 0);
+      SmallVector<int64_t, 4> strides(shape.size(), 1);
+      for (int i = shape.size() - 2; i >= 0; --i)
+        strides[i] = strides[i + 1] * shape[i + 1];
+
+      auto values = dense.getValues<mlir::Attribute>();
+
+      std::function<void(unsigned)> storeElements = [&](unsigned dim) {
+        if (dim == shape.size()) {
+          SmallVector<mlir::Value> indexValues;
+          int64_t flatIndex = 0;
+
+          for (unsigned i = 0; i < indices.size(); ++i) {
+            indexValues.push_back(
+                rewriter.create<mlir::arith::ConstantIndexOp>(  
+                    loc, indices[i]));
+            flatIndex += indices[i] * strides[i];
+          }
+
+          auto elementAttr =
+              llvm::cast<mlir::TypedAttr>(values[flatIndex]);
+
+          auto elementValue =
+              rewriter.create<mlir::arith::ConstantOp>(
+                  loc, elementAttr);
+
+          rewriter.create<mlir::affine::AffineStoreOp>(
+              loc, elementValue, alloc, indexValues);
+          return;
         }
-        
-        // Get the value at the current indices
-        auto flatIndex = 0;
-        auto strides = SmallVector<int64_t>(shape.size(), 1);
-        for (int i = shape.size() - 2; i >= 0; --i) {
-          strides[i] = strides[i + 1] * shape[i + 1];
+
+        for (int64_t i = 0; i < shape[dim]; ++i) {
+          indices[dim] = i;
+          storeElements(dim + 1);
         }
-        for (size_t i = 0; i < indices.size(); ++i) {
-          flatIndex += indices[i] * strides[i];
-        }
-        
-        auto elementAttr = denseAttr.getValues<mlir::Attribute>()[flatIndex];
-        auto typedAttr = llvm::cast<mlir::TypedAttr>(elementAttr);
-        auto elementValue = rewriter.create<mlir::arith::ConstantOp>(
-            op.getLoc(), typedAttr);
-        
-        // Store the value
-        rewriter.create<mlir::affine::AffineStoreOp>(
-            op.getLoc(), elementValue, alloc, indexValues);
-        return;
+      };
+
+      storeElements(0);
+      rewriter.replaceOp(op, alloc);
+      return mlir::success();
+    }
+
+    //DenseResourceElementsAttr（大权重）
+    if (llvm::isa<mlir::DenseResourceElementsAttr>(valueAttr)) {
+      // 只分配，不展开数据
+      auto alloc = insertAllocAndDealloc(memrefType, loc, rewriter);
+      rewriter.replaceOp(op, alloc);
+      return mlir::success();
+    }
+    return rewriter.notifyMatchFailure(
+        op, "unsupported tensor constant attribute");
+  }
+};
+//===----------------------------------------------------------------------===//
+// FuncOpLowering
+//===----------------------------------------------------------------------===//
+struct ArithFuncOpLowering : public mlir::OpConversionPattern<func::FuncOp> {
+  using OpConversionPattern<func::FuncOp>::OpConversionPattern;
+
+  mlir::LogicalResult
+  matchAndRewrite(func::FuncOp op,
+                  typename func::FuncOp::Adaptor adaptor,
+                  mlir::ConversionPatternRewriter &rewriter) const final {
+    // 仅处理 main 函数（保留原逻辑的函数筛选）
+    if (op.getName() != "main")
+      return mlir::failure();
+
+    mlir::Location loc = op.getLoc();
+    auto origFuncType = op.getFunctionType();
+
+    // 步骤1：转换函数输入类型（tensor → memref，其他类型保持不变）
+    mlir::SmallVector<mlir::Type, 4> newInputTypes;
+    for (mlir::Type inputType : origFuncType.getInputs()) {
+      if (auto tensorType = llvm::dyn_cast<mlir::RankedTensorType>(inputType)) {
+        newInputTypes.push_back(convertTensorToMemRef(tensorType));
+      } else {
+        newInputTypes.push_back(inputType);
       }
-      
-      // Iterate over the current dimension
-      for (int64_t i = 0; i < shape[dim]; ++i) {
-        indices[dim] = i;
-        storeElements(dim + 1);
+    }
+
+    // 步骤2：转换函数返回类型（tensor → memref，其他类型保持不变）
+    mlir::SmallVector<mlir::Type, 4> newResultTypes;
+    for (mlir::Type resultType : origFuncType.getResults()) {
+      if (auto tensorType = llvm::dyn_cast<mlir::RankedTensorType>(resultType)) {
+        newResultTypes.push_back(convertTensorToMemRef(tensorType));
+      } else {
+        newResultTypes.push_back(resultType);
       }
-    };
-    
-    storeElements(0);
-    
-    // Replace the tensor constant with the memref
-    rewriter.replaceOp(op, alloc);
+    }
+
+    // 步骤3：创建新的标准函数类型（使用转换后的输入/返回类型）
+    auto newFuncType = rewriter.getFunctionType(newInputTypes, newResultTypes);
+
+    // 步骤4：创建标准 mlir::func::FuncOp（适配旧版本 MLIR 构造函数）
+    // 保留原函数名，使用新的函数类型（已完成 tensor→memref 转换）
+    auto func = rewriter.create<mlir::func::FuncOp>(
+        loc, op.getName(), newFuncType);
+
+    // 步骤5：内联原 dsp::FuncOp 的函数体到新的 func::FuncOp 中
+    rewriter.inlineRegionBefore(op.getRegion(), func.getBody(), func.end());
+
+    // 步骤6：调整函数参数映射（原 tensor 类型参数 → 新 memref 类型参数）
+    for (auto [origArg, newArg] : llvm::zip(op.getArguments(), func.getArguments())) {
+      rewriter.replaceAllUsesWith(origArg, newArg);
+    }
+
+    // 步骤7：删除原 dsp::FuncOp，完成替换
+    rewriter.eraseOp(op);
+
     return mlir::success();
   }
 };
+//===----------------------------------------------------------------------===//
+// ReturnOpLowering
+//===----------------------------------------------------------------------===//
+// struct ArithReturnOpLowering : public OpRewritePattern<func::ReturnOp> {
+//   using OpRewritePattern<func::ReturnOp>::OpRewritePattern;
 
+//   LogicalResult matchAndRewrite(func::ReturnOp op,
+//                                 PatternRewriter &rewriter) const final {
+//     Location loc = op.getLoc();
+//     SmallVector<Value, 1> newOperands;
+
+//     // 遍历所有返回操作数，处理 tensor → memref 转换
+//     for (auto operand : op.getOperands()) {
+//       // 情况1：操作数已是 memref，直接复用
+//       if (llvm::isa<mlir::MemRefType>(operand.getType())) {
+//         newOperands.push_back(operand);
+//         continue;
+//       }
+
+//       // 情况2：操作数是 tensor，转为 memref 并拷贝数据
+//       auto tensorType = llvm::dyn_cast<mlir::RankedTensorType>(operand.getType());
+//       if (!tensorType) {
+//         // 非 tensor/memref 类型，直接保留（如标量）
+//         newOperands.push_back(operand);
+//         continue;
+//       }
+
+//       // 1. 转换 tensor 类型为 memref 类型
+//       auto memrefType = convertTensorToMemRef(tensorType);
+//       // 2. 分配 memref 内存（复用你提供的 insertAllocAndDealloc 函数，自动管理生命周期）
+//       auto alloc = insertAllocAndDealloc(memrefType, loc, rewriter);
+
+//       // 3. 递归遍历 tensor 所有元素，拷贝到 memref 中
+//       auto shape = tensorType.getShape();
+//       SmallVector<int64_t, 4> indices(shape.size(), 0);
+      
+//       std::function<void(unsigned)> copyElements = [&](unsigned dim) {
+//         if (dim == shape.size()) {
+//           // 叶子节点：生成索引并拷贝单个元素
+//           SmallVector<mlir::Value> indexValues;
+//           for (auto idx : indices) {
+//             indexValues.push_back(rewriter.create<mlir::arith::ConstantIndexOp>(
+//                 loc, idx));
+//           }
+
+//           // 从 tensor 中加载元素（用 affine::AffineLoadOp，而非不存在的 tensor::StoreOp）
+//           auto element = rewriter.create<mlir::affine::AffineLoadOp>(
+//               loc, operand, indexValues);
+          
+//           // 将元素存储到 memref 中（与 ArithConstantOpLowering 保持一致）
+//           rewriter.create<mlir::affine::AffineStoreOp>(
+//               loc, element, alloc, indexValues);
+//           return;
+//         }
+
+//         // 递归遍历当前维度的所有索引
+//         for (int64_t i = 0; i < shape[dim]; ++i) {
+//           indices[dim] = i;
+//           copyElements(dim + 1);
+//         }
+//       };
+
+//       // 执行元素拷贝
+//       copyElements(0);
+
+//       // 4. 将转换后的 memref 加入新返回操作数列表
+//       newOperands.push_back(alloc);
+//     }
+
+//     // 替换原 ReturnOp：如果新操作数列表为空，创建无参 ReturnOp；否则创建带参的
+//     if (newOperands.empty()) {
+//       rewriter.replaceOpWithNewOp<func::ReturnOp>(op);
+//     } else {
+//       rewriter.replaceOpWithNewOp<func::ReturnOp>(op, newOperands);
+//     }
+
+//     return mlir::success();
+//   }
+// };
 //===----------------------------------------------------------------------===//
 // PrintOpLowering
 //===----------------------------------------------------------------------===//
@@ -457,104 +670,213 @@ class PrintOpLowering : public mlir::OpConversionPattern<riscv::PrintOp> {
 };
 
 //===----------------------------------------------------------------------===//
-// ToAffine RewritePatterns: Matmul operations
+// ToAffine RewritePatterns: Matmul operations (输入为Tensor类型)
 //===----------------------------------------------------------------------===//
+// struct MatmulOpLowering : public ConversionPattern {
+//   MatmulOpLowering(MLIRContext *ctx)
+//       : ConversionPattern(riscv::MatmulOp::getOperationName(), 1, ctx) {}
+
+//   LogicalResult
+//   matchAndRewrite(Operation *op, ArrayRef<Value> operands,
+//                   ConversionPatternRewriter &rewriter) const final {
+
+//     // Get the location of GainOp
+//     auto loc = op->getLoc();
+
+//     // output for result type
+//     auto tensorType = llvm::cast<RankedTensorType>((*op->result_type_begin()));
+
+//     // allocation & deallocation for the result of this operation
+//     auto memRefType = convertTensorToMemRef(tensorType);
+//     auto alloc_output = insertAllocAndDealloc(memRefType, loc, rewriter);
+
+//     typename riscv::MatmulOp::Adaptor binaryAdaptor(operands);
+
+//     auto lhsType =
+//         llvm::dyn_cast<RankedTensorType>(op->getOperand(0).getType());
+//     // auto rhsType =
+//     // llvm::dyn_cast<RankedTensorType>(op->getOperand(1).getType());
+
+//     // first from 1 <= i < N
+//     int64_t lb = 0;
+//     int64_t ub_0 = lhsType.getShape()[0];
+//     int64_t ub_1 = lhsType.getShape()[1];
+//     int64_t step = 1;
+
+//     Value constantZero = rewriter.create<arith::ConstantOp>(
+//         loc, rewriter.getF64Type(), rewriter.getF64FloatAttr(0));
+
+//     // NOTE: matrix [y, x] --> y means row, x means column
+//     affine::AffineForOp forOpY =
+//         rewriter.create<affine::AffineForOp>(loc, lb, ub_0, step);
+//     auto ivY = forOpY.getInductionVar();
+//     rewriter.setInsertionPointToStart(forOpY.getBody());
+
+//     affine::AffineForOp forOpX =
+//         rewriter.create<affine::AffineForOp>(loc, lb, ub_1, step);
+//     auto ivX = forOpX.getInductionVar();
+//     // auto getIterArg =  forOpX.getBody()->getArgument(1); //HWISOO: Find this
+//     // to check how previous codes did
+//     rewriter.setInsertionPointToStart(forOpX.getBody());
+
+//     rewriter.create<affine::AffineStoreOp>(loc, constantZero, alloc_output,
+//                                    ValueRange{ivY, ivX});
+
+//     affine::AffineForOp forOpIndex =
+//         rewriter.create<affine::AffineForOp>(loc, lb, ub_1, step);
+//     auto ivIndex = forOpIndex.getInductionVar();
+//     rewriter.setInsertionPointToStart(forOpIndex.getBody());
+
+//     auto loadedLhs = rewriter.create<affine::AffineLoadOp>(
+//         loc, binaryAdaptor.getLhs(), ValueRange{ivY, ivIndex});
+
+//     auto loadedRhs = rewriter.create<affine::AffineLoadOp>(
+//         loc, binaryAdaptor.getRhs(), ValueRange{ivIndex, ivX});
+
+//     Value mulLhsRhs = rewriter.create<arith::MulFOp>(loc, loadedLhs, loadedRhs);
+
+//     auto loadedResult = rewriter.create<affine::AffineLoadOp>(
+//         loc, alloc_output, ValueRange{ivY, ivX});
+
+//     Value addResultAndMul =
+//         rewriter.create<arith::AddFOp>(loc, loadedResult, mulLhsRhs);
+
+//     rewriter.create<affine::AffineStoreOp>(loc, addResultAndMul, alloc_output,
+//                                    ValueRange{ivY, ivX});
+//     rewriter.setInsertionPointAfter(forOpY);
+
+//     // DEBUG_PRINT_NO_ARGS();
+
+//     // rewriter.replaceOp(op, FloatOp);
+//     rewriter.replaceOp(op, alloc_output);
+
+//     return success();
+//   }
+// };
+//===----------------------------------------------------------------------===//
+// ToAffine RewritePatterns: Matmul operations （适配linalg bufferization转换）
+//===----------------------------------------------------------------------===//
+
 struct MatmulOpLowering : public ConversionPattern {
   MatmulOpLowering(MLIRContext *ctx)
       : ConversionPattern(riscv::MatmulOp::getOperationName(), 1, ctx) {}
 
-    LogicalResult
-    matchAndRewrite(Operation *op, ArrayRef<Value> operands,
-                    ConversionPatternRewriter &rewriter) const final {
-      auto loc = op->getLoc();
-      
-      // Get the operand types and shapes
-      auto matmulOp = cast<riscv::MatmulOp>(op);
-      auto lhsType = mlir::cast<RankedTensorType>(matmulOp.getLhs().getType());
-      auto rhsType = mlir::cast<RankedTensorType>(matmulOp.getRhs().getType());
-      auto resultType = mlir::cast<RankedTensorType>(matmulOp.getResult().getType());
-      
-      // Extract dimensions: lhs is MxK, rhs is KxN, result is MxN
-      int64_t M = lhsType.getShape()[0];
-      int64_t K = lhsType.getShape()[1];
-      int64_t N = rhsType.getShape()[1];
-      
-      // Allocate result memref
-      auto memRefType = convertTensorToMemRef(resultType);
-      auto alloc = insertAllocAndDealloc(memRefType, loc, rewriter);
-      
-      // Initialize result to zero based on element type
-      auto elementType = resultType.getElementType();
-      Value zero;
-      
-      if (mlir::isa<FloatType>(elementType)) {
-        auto zeroAttr = rewriter.getZeroAttr(elementType);
-        zero = rewriter.create<arith::ConstantOp>(loc, zeroAttr);
-      } else if (mlir::isa<IntegerType>(elementType)) {
-        auto zeroAttr = rewriter.getZeroAttr(elementType);
-        zero = rewriter.create<arith::ConstantOp>(loc, zeroAttr);
-      } else {
-        return failure();
-      }
-      
-      // Initialize result matrix to zero
-      SmallVector<int64_t, 2> initLowerBounds = {0, 0};
-      SmallVector<int64_t, 2> initUpperBounds = {M, N};
-      SmallVector<int64_t, 2> initSteps = {1, 1};
-      
-      affine::buildAffineLoopNest(
-          rewriter, loc, initLowerBounds, initUpperBounds, initSteps,
-          [&](OpBuilder &nestedBuilder, Location loc, ValueRange ivs) {
-            nestedBuilder.create<affine::AffineStoreOp>(loc, zero, alloc, ivs);
-          });
-      
-      // Create three nested loops for matrix multiplication
-      SmallVector<int64_t, 3> lowerBounds = {0, 0, 0};
-      SmallVector<int64_t, 3> upperBounds = {M, N, K};
-      SmallVector<int64_t, 3> steps = {1, 1, 1};
-      
-      affine::buildAffineLoopNest(
-          rewriter, loc, lowerBounds, upperBounds, steps,
-          [&](OpBuilder &nestedBuilder, Location loc, ValueRange ivs) {
-            Value i = ivs[0]; // Row index for result and lhs
-            Value j = ivs[1]; // Column index for result and rhs
-            Value k = ivs[2]; // Reduction dimension
-            
-            // Load lhs[i][k] and rhs[k][j]
-            auto loadedLhs = nestedBuilder.create<affine::AffineLoadOp>(
-                loc, operands[0], ValueRange{i, k});
-            auto loadedRhs = nestedBuilder.create<affine::AffineLoadOp>(
-                loc, operands[1], ValueRange{k, j});
-            
-            // Multiply lhs[i][k] * rhs[k][j]
-            Value mul;
-            if (mlir::isa<FloatType>(elementType)) {
-              mul = nestedBuilder.create<arith::MulFOp>(loc, loadedLhs, loadedRhs);
-            } else if (mlir::isa<IntegerType>(elementType)) {
-              mul = nestedBuilder.create<arith::MulIOp>(loc, loadedLhs, loadedRhs);
-            }
-            
-            // Load current accumulator value
-            auto currentSum = nestedBuilder.create<affine::AffineLoadOp>(
-                loc, alloc, ValueRange{i, j});
-            
-            // Add to accumulator
-            Value newSum;
-            if (mlir::isa<FloatType>(elementType)) {
-              newSum = nestedBuilder.create<arith::AddFOp>(loc, currentSum, mul);
-            } else if (mlir::isa<IntegerType>(elementType)) {
-              newSum = nestedBuilder.create<arith::AddIOp>(loc, currentSum, mul);
-            }
-            
-            // Store back
-            nestedBuilder.create<affine::AffineStoreOp>(loc, newSum, alloc, ValueRange{i, j});
-          });
-      
-      // Replace operation with result allocation
-      rewriter.replaceOp(op, alloc);
-      return success();
-    }
+  LogicalResult
+  matchAndRewrite(Operation *op, ArrayRef<Value> operands,
+                  ConversionPatternRewriter &rewriter) const final {
+    auto loc = op->getLoc();
+    auto matmulOp = cast<riscv::MatmulOp>(op);
+    Value lhs = matmulOp.getLhs();    // memref<MxK>
+    Value rhs = matmulOp.getRhs();    // memref<KxN>
+    Value out = matmulOp.getOutput();   // memref<MxN>
+
+    auto lhsType = cast<MemRefType> (lhs.getType());
+    auto rhsType = cast<MemRefType> (rhs.getType());
+    auto outType = cast<MemRefType> (out.getType());
+
+    int64_t M = lhsType.getShape()[0];
+    int64_t K = lhsType.getShape()[1];
+    int64_t N = rhsType.getShape()[1];
+    // Build affine loop nest: for i, j, k
+    SmallVector<int64_t> lowerBounds = {0, 0};
+    SmallVector<int64_t> steps = {1, 1};
+
+    affine::buildAffineLoopNest(
+        rewriter, loc,
+        /*lbs=*/lowerBounds,
+        /*ubs=*/{M, N},
+        /*steps=*/steps,
+        [&](OpBuilder &b, Location loc, ValueRange ivs) {
+          Value ivI = ivs[0];
+          Value ivJ = ivs[1];
+
+          // C[i, j] = C[i, j] + sum_k A[i, k] * B[k, j]
+          Value acc = b.create<affine::AffineLoadOp>(
+              loc, out, ValueRange{ivI, ivJ});
+
+          affine::AffineForOp forK =
+              b.create<affine::AffineForOp>(loc, 0, K, 1);
+          Value ivK = forK.getInductionVar();
+
+          b.setInsertionPointToStart(forK.getBody());
+
+          Value a = b.create<affine::AffineLoadOp>(
+              loc, lhs, ValueRange{ivI, ivK});
+          Value bval = b.create<affine::AffineLoadOp>(
+              loc, rhs, ValueRange{ivK, ivJ});
+
+          Value mul = b.create<arith::MulFOp>(loc, a, bval);
+          Value newAcc = b.create<arith::AddFOp>(loc, acc, mul);
+
+          b.create<affine::AffineStoreOp>(
+              loc, newAcc, out, ValueRange{ivI, ivJ});
+        });
+    rewriter.eraseOp(op);
+    return success();
+  }
 };
+//===----------------------------------------------------------------------===//
+// ToAffine RewritePatterns: BatchMatmulOp operations
+//===----------------------------------------------------------------------===//
+struct BatchMatmulOpLowering : public ConversionPattern {
+  BatchMatmulOpLowering(MLIRContext *ctx)
+      : ConversionPattern(riscv::BatchMatMulOp::getOperationName(), 1, ctx) {}
+
+  LogicalResult
+  matchAndRewrite(Operation *op, ArrayRef<Value> operands,
+                  ConversionPatternRewriter &rewriter) const final {
+    auto loc = op->getLoc();
+    auto batchMatmulOp = cast<riscv::BatchMatMulOp>(op);
+    Value lhs = batchMatmulOp.getLhs();
+    Value rhs = batchMatmulOp.getRhs();
+    Value out = batchMatmulOp.getOutput();
+
+    auto lhsType = cast<MemRefType>(lhs.getType());
+    auto rhsType = cast<MemRefType>(rhs.getType());
+
+    int64_t B = lhsType.getShape()[0];
+    int64_t M = lhsType.getShape()[1];
+    int64_t K = lhsType.getShape()[2];
+    int64_t N = rhsType.getShape()[2];
+
+    SmallVector<int64_t> lowerBounds = {0, 0, 0};
+    SmallVector<int64_t> steps = {1, 1, 1};
+
+    affine::buildAffineLoopNest(
+        rewriter, loc,
+        lowerBounds,
+        {B, M, N},
+        steps,
+        [&](OpBuilder &b, Location loc, ValueRange ivs) {
+          Value ivB = ivs[0];
+          Value ivI = ivs[1];
+          Value ivJ = ivs[2];
+
+          Value acc = b.create<affine::AffineLoadOp>(
+              loc, out, ValueRange{ivB, ivI, ivJ});
+
+          affine::AffineForOp forK =
+              b.create<affine::AffineForOp>(loc, 0, K, 1);
+          Value ivK = forK.getInductionVar();
+
+          b.setInsertionPointToStart(forK.getBody());
+
+          Value a = b.create<affine::AffineLoadOp>(
+              loc, lhs, ValueRange{ivB, ivI, ivK});
+          Value bval = b.create<affine::AffineLoadOp>(
+              loc, rhs, ValueRange{ivB, ivK, ivJ});
+
+          Value mul = b.create<arith::MulFOp>(loc, a, bval);
+          Value newAcc = b.create<arith::AddFOp>(loc, acc, mul);
+
+          b.create<affine::AffineStoreOp>(
+              loc, newAcc, out, ValueRange{ivB, ivI, ivJ});
+        });
+    rewriter.eraseOp(op);
+    return success();
+  }
+};
+
 //===----------------------------------------------------------------------===//
 // ToAffine RewritePatterns: Matvec operations
 //===----------------------------------------------------------------------===//
@@ -672,39 +994,81 @@ struct MatvecOpLowering : public ConversionPattern {
 //===----------------------------------------------------------------------===//
 // ToAffine RewritePatterns: Transpose operations (支持 transp 参数)
 //===----------------------------------------------------------------------===//
+// struct TransposeOpLowering : public ConversionPattern {
+//   TransposeOpLowering(MLIRContext *ctx)
+//       : ConversionPattern(riscv::TransposeOp::getOperationName(), 1, ctx) {}
+
+//   LogicalResult
+//   matchAndRewrite(Operation *op, ArrayRef<Value> operands,
+//                   ConversionPatternRewriter &rewriter) const final {
+//     auto loc = op->getLoc();
+//     auto transposeOp = cast<riscv::TransposeOp>(op);
+//     auto transpAttrList = transposeOp.getTransp().getValue();
+//     SmallVector<int64_t, 4> transpDims; 
+//     for (mlir::Attribute attr : transpAttrList) {
+//       auto intAttr = dyn_cast<mlir::IntegerAttr>(attr);
+//       transpDims.push_back(intAttr.getValue().getSExtValue());
+//     }
+//     lowerOpToLoops(op, operands, rewriter,
+//                    [loc, transpDims](OpBuilder &builder, ValueRange memRefOperands,
+//                                      ValueRange loopIvs) {
+          
+//                      riscv::TransposeOpAdaptor transposeAdaptor(memRefOperands);
+//                      Value inputMemRef = transposeAdaptor.getInput();
+
+//                      SmallVector<Value, 4> transposedIvs;
+//                      for (int64_t dimIdx : transpDims) {
+//                        transposedIvs.push_back(loopIvs[dimIdx]);
+//                      }
+//                      return builder.create<affine::AffineLoadOp>(
+//                          loc, inputMemRef, transposedIvs);
+//                    });
+
+//     return success();
+//   }
+// };
+//===----------------------------------------------------------------------===//
+// ToAffine RewritePatterns: Transpose operations (支持 transp 参数，适配linalg bufferization转换)
+//===----------------------------------------------------------------------===//
 struct TransposeOpLowering : public ConversionPattern {
   TransposeOpLowering(MLIRContext *ctx)
       : ConversionPattern(riscv::TransposeOp::getOperationName(), 1, ctx) {}
 
-  LogicalResult
-  matchAndRewrite(Operation *op, ArrayRef<Value> operands,
-                  ConversionPatternRewriter &rewriter) const final {
-    auto loc = op->getLoc();
-    auto transposeOp = cast<riscv::TransposeOp>(op);
-    auto transpAttrList = transposeOp.getTransp().getValue();
-    SmallVector<int64_t, 4> transpDims; 
-    for (mlir::Attribute attr : transpAttrList) {
-      auto intAttr = dyn_cast<mlir::IntegerAttr>(attr);
-      transpDims.push_back(intAttr.getValue().getSExtValue());
-    }
-    lowerOpToLoops(op, operands, rewriter,
-                   [loc, transpDims](OpBuilder &builder, ValueRange memRefOperands,
-                                     ValueRange loopIvs) {
-          
-                     riscv::TransposeOpAdaptor transposeAdaptor(memRefOperands);
-                     Value inputMemRef = transposeAdaptor.getInput();
+LogicalResult
+matchAndRewrite(Operation *op, ArrayRef<Value> operands,
+                ConversionPatternRewriter &rewriter) const final {
+  auto loc = op->getLoc();
+  auto transposeOp = cast<riscv::TransposeOp>(op);
 
-                     SmallVector<Value, 4> transposedIvs;
-                     for (int64_t dimIdx : transpDims) {
-                       transposedIvs.push_back(loopIvs[dimIdx]);
-                     }
-                     return builder.create<affine::AffineLoadOp>(
-                         loc, inputMemRef, transposedIvs);
-                   });
+  Value input = transposeOp.getInput(); // 转置的输入张量（MemRef类型）
+  Value output = transposeOp.getInit(); // 转置的输出张量（MemRef类型）
 
-    return success();
-  }
+  auto inputType = cast<MemRefType>(input.getType()); // 获取输入的MemRef类型（包含维度、数据类型等）
+  auto shape = inputType.getShape(); // 提取输入张量的维度（如 [8192,2048]）
+
+  SmallVector<int64_t> lowerBounds(shape.size(), 0); // 循环下界：所有维度从0开始（如 [0,0]）
+  SmallVector<int64_t> steps(shape.size(), 1); // 循环步长：所有维度步长为1（逐元素遍历）
+
+  auto permAttr = transposeOp.getPermutation(); // 获取转置的维度排列属性（如 [1,0] 表示2D张量行列互换）
+  SmallVector<int64_t> permDims(permAttr.begin(), permAttr.end());// 转换为整数向量（方便后续使用）
+
+  affine::buildAffineLoopNest(
+      rewriter, loc, lowerBounds, shape, steps,
+      [&](OpBuilder &b, Location loc, ValueRange ivs) {  //ivs：循环索引值，ivs[0]是行索引，ivs[1]是列索引；
+        SmallVector<Value> transposedIvs;
+        for (int64_t d : permDims)
+          transposedIvs.push_back(ivs[d]);
+        Value v =
+            b.create<affine::AffineLoadOp>(loc, input, transposedIvs);
+        b.create<affine::AffineStoreOp>(loc, v, output, ivs);
+      });
+
+  rewriter.eraseOp(op);
+  return success();
+}
+
 };
+
 //===----------------------------------------------------------------------===//
 // ToAffine RewritePatterns: Reduce operations
 //===----------------------------------------------------------------------===//
@@ -2145,7 +2509,8 @@ public:
 
     // replace output events with riscv.wait_all
     if (op->getNumResults()) {
-      SmallVector<Value> deps;
+      SmallVector<Value> asyncDeps = launch.getAsyncDependencies();
+      SmallVector<Value> deps = asyncDeps;
       for (auto &o : operands)
         if (llvm::isa<riscv::EventType>(o.getType()))
           deps.push_back(o);
@@ -2159,10 +2524,6 @@ public:
   }
 };
 
-
-//===----------------------------------------------------------------------===//
-// ToAffine RewritePatterns: Herd operations
-//===----------------------------------------------------------------------===//
 //===----------------------------------------------------------------------===//
 // ToAffine RewritePatterns: Load operations
 //===----------------------------------------------------------------------===//
@@ -2265,328 +2626,8 @@ LogicalResult lowerLoad(Operation *op, PatternRewriter &rewriter,
   }
   return success();
 }
-//===----------------------------------------------------------------------===//
-// ToAffine RewritePatterns:GMEMAllocOpConversion
-//===----------------------------------------------------------------------===//
-class GMEMAllocOpConversion : public OpConversionPattern<memref::AllocOp> {
-public:
-  using OpConversionPattern<memref::AllocOp>::OpConversionPattern;
-
-  LogicalResult
-  matchAndRewrite(memref::AllocOp op, OpAdaptor adaptor,
-                  ConversionPatternRewriter &rewriter) const override {
-
-    auto memrefTy = op.getType();
-    if (op.getType().getMemorySpaceAsInt() != (int)riscv::MemorySpace::GMEM)
-      return failure();
-
-    auto alloc = rewriter.create<memref::AllocOp>(
-        op.getLoc(),
-        MemRefType::get(memrefTy.getShape(), memrefTy.getElementType(),
-                        memrefTy.getLayout(), 0));
-    rewriter.replaceOp(op, alloc.getResult());
-    return success();
-  }
-};
-//===----------------------------------------------------------------------===//
-// ToAffine RewritePatterns:GMEMDeallocOpConversion
-//===----------------------------------------------------------------------===//
-class GMEMDeallocOpConversion : public OpConversionPattern<memref::DeallocOp> {
-public:
-  using OpConversionPattern<memref::DeallocOp>::OpConversionPattern;
-
-  LogicalResult
-  matchAndRewrite(memref::DeallocOp op, OpAdaptor adaptor,
-                  ConversionPatternRewriter &rewriter) const override {
-
-    auto memrefTy = llvm::cast<MemRefType>(op.getMemref().getType());
-    if (memrefTy.getMemorySpaceAsInt() != (int)riscv::MemorySpace::GMEM)
-      return failure();
-
-    rewriter.create<memref::DeallocOp>(op.getLoc(), adaptor.getMemref());
-    rewriter.eraseOp(op);
-    return success();
-  }
-};
-//===----------------------------------------------------------------------===//
-// ToAffine RewritePatterns: Alloc Interface
-//===----------------------------------------------------------------------===//
-static uint64_t getTensorVolume(const ShapedType ty) {
-
-  if (!ty.hasRank())
-    return 1;
-
-  uint64_t volume = 1;
-  for (auto &d : ty.getShape())
-    volume *= d;
-  return volume * (ty.getElementTypeBitWidth() / 8);
-}
-
-static uint64_t getTensorVolume(const Type ty) {
-  if (auto t = llvm::dyn_cast<ShapedType>(ty)) {
-    return getTensorVolume(t);
-  } else {
-    return 1;
-  }
-}
-//===----------------------------------------------------------------------===//
-// ToAffine RewritePatterns: LMEMAllocOpConversion
-//===----------------------------------------------------------------------===//
-class LMEMAllocOpConversion : public OpRewritePattern<riscv::AllocOp> {
-public:
-  using OpRewritePattern<riscv::AllocOp>::OpRewritePattern;
-
-  LogicalResult matchAndRewrite(riscv::AllocOp op,
-                                PatternRewriter &rewriter) const override {
-
-    SmallVector<Value, 1> operands;
-    SmallVector<Type, 1> tys;
-    SmallVector<Type, 1> retTys;
-
-    auto ctx = op->getContext();
-
-    auto memrefTy = llvm::cast<MemRefType>(op.getType());
-    if (memrefTy.getMemorySpaceAsInt() != (int)riscv::MemorySpace::LMEM)
-      return failure();
-
-    tys.push_back(IndexType::get(ctx));
-    retTys.push_back(MemRefType::get(
-        std::vector<int64_t>(memrefTy.getRank(), ShapedType::kDynamic),
-        memrefTy.getElementType(), memrefTy.getLayout(),
-        memrefTy.getMemorySpace()));
-
-    auto size = getTensorVolume(memrefTy);
-    operands.push_back(
-        rewriter.create<arith::ConstantIndexOp>(op->getLoc(), size));
-
-    auto module = op->getParentOfType<ModuleOp>();
-
-    std::string fnName = "__npu_mem_malloc";
-    llvm::raw_string_ostream ss(fnName);
-    // ss << "_" << memrefTy.getRank();
-    // ss << "d" << memrefTy.getMemorySpaceAsInt();
-    // memrefTy.getElementType().print(ss);
-
-    auto fn = module.lookupSymbol<func::FuncOp>(fnName);
-    if (!fn) {
-      auto fnTy = FunctionType::get(ctx, tys, retTys);
-      fn = func::FuncOp::create(rewriter.getUnknownLoc(), fnName, fnTy);
-      fn.setPrivate();
-      module.push_back(fn);
-    }
-
-    auto callOp = rewriter.create<func::CallOp>(
-        op->getLoc(), retTys, SymbolRefAttr::get(fn), operands);
-    auto castOp = rewriter.create<memref::CastOp>(op->getLoc(), memrefTy,
-                                                  callOp.getResult(0));
-    rewriter.replaceOp(op, castOp->getResults());
-    return success();
-  }
-};
-//===----------------------------------------------------------------------===//
-// ToAffine RewritePatterns: Load operations
-//===----------------------------------------------------------------------===//
-class LMEMDeallocOpConversion
-    : public OpRewritePattern<riscv::DeallocOp> {
-public:
-  using OpRewritePattern<riscv::DeallocOp>::OpRewritePattern;
-
-  LogicalResult matchAndRewrite(riscv::DeallocOp op,
-                                PatternRewriter &rewriter) const override {
-
-    SmallVector<Value, 1> operands;
-    SmallVector<Type, 1> tys;
-    SmallVector<Type, 1> retTys;
-    auto ctx = op->getContext();
-
-    auto memrefTy = llvm::cast<MemRefType>(op.getMemref().getType());
-    if (memrefTy.getMemorySpaceAsInt() != (int)riscv::MemorySpace::LMEM)
-      return failure();
-
-    tys.push_back(MemRefType::get(
-        std::vector<int64_t>(memrefTy.getRank(), ShapedType::kDynamic),
-        memrefTy.getElementType(), memrefTy.getLayout(),
-        memrefTy.getMemorySpace()));
-    operands.push_back(
-        rewriter.create<memref::CastOp>(op->getLoc(), tys[0], op.getMemref()));
-
-    auto module = op->getParentOfType<ModuleOp>();
-
-    std::string fnName = "__npu_mem_free";
-    llvm::raw_string_ostream ss(fnName);
-    // ss << "_" << memrefTy.getRank();
-    // ss << "d" << memrefTy.getMemorySpaceAsInt();
-    // memrefTy.getElementType().print(ss);
-
-    auto fn = module.lookupSymbol<func::FuncOp>(fnName);
-    if (!fn) {
-      auto fnTy = FunctionType::get(ctx, tys, retTys);
-      fn = func::FuncOp::create(rewriter.getUnknownLoc(), fnName, fnTy);
-      fn.setPrivate();
-      module.push_back(fn);
-    }
-
-    rewriter.create<func::CallOp>(op->getLoc(), retTys, SymbolRefAttr::get(fn),
-                                  operands);
-    rewriter.eraseOp(op);
-    return success();
-  }
-};
-
-//===----------------------------------------------------------------------===//
-// General template class: for *_DRV Lowering
-//===----------------------------------------------------------------------===//
-
-template <typename OpTy, const char* IntrinsicName>
-class DrvOpLowering : public OpRewritePattern<OpTy> {
-public:
-  using OpRewritePattern<OpTy>::OpRewritePattern;
-
-  LogicalResult matchAndRewrite(OpTy op,
-                                PatternRewriter &rewriter) const override {
-    auto loc = op->getLoc();
-    auto ctx = op->getContext();
-    
-    BaseMemRefType srcMemRefTy = llvm::cast<BaseMemRefType>(op.getSrcMemref().getType());
-    BaseMemRefType dstMemRefTy = llvm::cast<BaseMemRefType>(op.getDstMemref().getType());
-    (void)srcMemRefTy; (void)dstMemRefTy; 
-
-    SmallVector<Value, 4> deps;
-    for (auto o : op.getOperands()) {
-      if (llvm::isa<riscv::EventType>(o.getType())) {
-        deps.push_back(o);
-      }
-    }
-    if (!deps.empty()) {
-      rewriter.create<riscv::WaitAllOp>(loc, riscv::EventType::get(ctx), deps);
-    }
-
-    Type i32Ty = IntegerType::get(ctx, 32);
-    Value srcIndex = op.getSrcOffsets()[0];
-    Value dstIndex = op.getDstOffsets()[0];
-    Value srcI32 = rewriter.create<arith::IndexCastOp>(loc, i32Ty, srcIndex);
-    Value dstI32 = rewriter.create<arith::IndexCastOp>(loc, i32Ty, dstIndex);
-
-    auto module = op->template getParentOfType<mlir::ModuleOp>();
-    
-    SmallVector<Type, 2> funcArgsTy = {i32Ty, i32Ty};
-    SmallVector<Type, 1> funcRetTy = {i32Ty};
-    auto funcType = mlir::FunctionType::get(ctx, funcArgsTy, funcRetTy);
-
-    auto dmaFunc = module.template lookupSymbol<mlir::func::FuncOp>(IntrinsicName);
-    
-    if (!dmaFunc) {
-      OpBuilder::InsertionGuard guard(rewriter);
-      rewriter.setInsertionPointToStart(module.getBody());
-      dmaFunc = mlir::func::FuncOp::create(loc, IntrinsicName, funcType);
-      dmaFunc.setPrivate();
-      module.push_back(dmaFunc);
-    } else {
-      if (dmaFunc.getFunctionType() != funcType) {
-        return op->emitError("existing function '")
-               << IntrinsicName << "' has incompatible type";
-      }
-    }
-
-    SmallVector<Value, 2> callArgs = {srcI32, dstI32};
-    SmallVector<Type, 1> callResultTypes = {i32Ty};
-    rewriter.create<mlir::func::CallOp>(loc, callResultTypes,
-                                  mlir::SymbolRefAttr::get(ctx, IntrinsicName),
-                                  callArgs);
-
-    rewriter.eraseOp(op);
-    return mlir::success();
-  }
-};
-
-//===----------------------------------------------------------------------===//
-// ToLLVMFunc RewritePatterns: TLD_DRV operations
-//===----------------------------------------------------------------------===//
-const char LoadIntrinsicName[] = "llvm.riscv.load";
-using LoadOpLowering = DrvOpLowering<riscv::LoadDrvOp, LoadIntrinsicName>;
-
-//===----------------------------------------------------------------------===//
-// ToLLVMFunc RewritePatterns: TST_DRV operations
-//===----------------------------------------------------------------------===//
-const char StoreIntrinsicName[] = "llvm.riscv.store"; 
-using StoreOpLowering = DrvOpLowering<riscv::StoreDrvOp, StoreIntrinsicName>;
 
 
-//===----------------------------------------------------------------------===//
-// ToLLVMFunc RewritePatterns: WaitAll operations
-//===----------------------------------------------------------------------===//
-
-// struct WaitAllOpLowering
-//     : public OpConversionPattern<riscv::WaitAllOp> {
-// public:
-//   using OpConversionPattern<riscv::WaitAllOp>::OpConversionPattern;
-
-//   LogicalResult
-//   matchAndRewrite(riscv::WaitAllOp op, OpAdaptor adaptor,
-//                   ConversionPatternRewriter &rewriter) const override {
-
-//     SmallVector<Value, 8> operands{adaptor.getOperands()};
-//     auto module = op->getParentOfType<ModuleOp>();
-//     auto ctx = op->getContext();
-
-//     SmallVector<Type, 8> tys(operands.size(), LLVM::LLVMPointerType::get(ctx));
-//     SmallVector<Type, 1> retTys(op->getNumResults(),
-//                                 LLVM::LLVMPointerType::get(ctx));
-
-//     std::string fnName = "__cim_wait_all";
-//     llvm::raw_string_ostream ss(fnName);
-//     ss << "_" << retTys.size() << "_" << operands.size();
-
-//     auto fn = module.lookupSymbol<func::FuncOp>(fnName);
-//     if (!fn) {
-//       auto fnTy = FunctionType::get(ctx, tys, retTys);
-//       fn = func::FuncOp::create(rewriter.getUnknownLoc(), fnName, fnTy);
-//       fn.setPrivate();
-//       module.push_back(fn);
-//     }
-
-//     rewriter.replaceOpWithNewOp<func::CallOp>(op, retTys,
-//                                               SymbolRefAttr::get(fn), operands);
-//     return success();
-//   }
-// };
-
-class WaitAllOpLowering : public OpConversionPattern<riscv::WaitAllOp> {
-public:
-  using OpConversionPattern<riscv::WaitAllOp>::OpConversionPattern;
-
-  LogicalResult matchAndRewrite(riscv::WaitAllOp op, OpAdaptor adaptor,
-                                ConversionPatternRewriter &rewriter) const override {
-    SmallVector<Value, 8> operands{adaptor.getOperands()};
-    auto module = op->getParentOfType<ModuleOp>();
-    auto ctx = op->getContext();
-
-    // 定义函数参数/返回值类型（统一为 LLVM 指针类型）
-    SmallVector<Type, 8> tys(operands.size(), mlir::LLVM::LLVMPointerType::get(ctx));
-    SmallVector<Type, 1> retTys(op->getNumResults(), mlir::LLVM::LLVMPointerType::get(ctx));
-
-    std::string fnName = "llvm.riscv.sync";
-    llvm::raw_string_ostream ss(fnName);
-    ss << "_" << retTys.size() << "_" << operands.size();
-
-    auto fn = module.lookupSymbol<func::FuncOp>(fnName);
-    if (!fn) {
-      auto fnTy = mlir::FunctionType::get(ctx, tys, retTys);
-      fn = mlir::func::FuncOp::create(rewriter.getUnknownLoc(), fnName, fnTy);
-      fn.setPrivate(); // 标记为私有函数
-      module.push_back(fn);
-    }
-
-    rewriter.replaceOpWithNewOp<mlir::func::CallOp>(
-        op,                              // 被替换的 Op
-        retTys,                          // 返回值类型
-        mlir::SymbolRefAttr::get(fn),    // 调用的函数名
-        operands                         // 函数参数
-    );
-
-    return mlir::success();
-  }
-};
 //===----------------------------------------------------------------------===//
 // ToAffine RewritePatterns: ScfParOpConversion
 //===----------------------------------------------------------------------===//
@@ -2663,6 +2704,232 @@ LogicalResult ScfParToAffineForConversion(Operation *op) {
   return success();
 }
 
+//===----------------------------------------------------------------------===//
+// ToAffine RewritePatterns: GMEMAllocOpConversion
+//===----------------------------------------------------------------------===//
+class GMEMAllocOpConversion : public OpConversionPattern<riscv::AllocOp> {
+public:
+  using OpConversionPattern<riscv::AllocOp>::OpConversionPattern;
+
+  LogicalResult
+  matchAndRewrite(riscv::AllocOp op, OpAdaptor adaptor,
+                  ConversionPatternRewriter &rewriter) const override {
+
+    auto memrefTy = op.getType();
+    if (op.getType().getMemorySpaceAsInt() != (int)riscv::MemorySpace::GMEM)
+      return failure();
+
+    auto alloc = rewriter.create<memref::AllocOp>(
+        op.getLoc(),
+        MemRefType::get(memrefTy.getShape(), memrefTy.getElementType(),
+                        memrefTy.getLayout(), 0));
+    rewriter.replaceOp(op, alloc.getResult());
+    return success();
+  }
+};
+//===----------------------------------------------------------------------===//
+// ToAffine RewritePatterns:GMEMDeallocOpConversion
+//===----------------------------------------------------------------------===//
+class GMEMDeallocOpConversion : public OpConversionPattern<riscv::DeallocOp> {
+public:
+  using OpConversionPattern<riscv::DeallocOp>::OpConversionPattern;
+
+  LogicalResult
+  matchAndRewrite(riscv::DeallocOp op, OpAdaptor adaptor,
+                  ConversionPatternRewriter &rewriter) const override {
+
+    auto memrefTy = llvm::cast<MemRefType>(op.getMemref().getType());
+    if (memrefTy.getMemorySpaceAsInt() != (int)riscv::MemorySpace::GMEM)
+      return failure();
+
+    rewriter.create<memref::DeallocOp>(op.getLoc(), adaptor.getMemref());
+    rewriter.eraseOp(op);
+    return success();
+  }
+};
+
+//===----------------------------------------------------------------------===//
+// ToLLVMFunc RewritePatterns: WaitAll operations
+//===----------------------------------------------------------------------===//
+class WaitAllOpLoweringToAsync : public OpConversionPattern<riscv::WaitAllOp> {
+public:
+  using OpConversionPattern<riscv::WaitAllOp>::OpConversionPattern;
+
+  LogicalResult
+  matchAndRewrite(riscv::WaitAllOp op, OpAdaptor adaptor,
+                  ConversionPatternRewriter &rewriter) const override {
+    SmallVector<Value, 8> operands{adaptor.getOperands()};
+
+    if (op->getNumResults() == 1) {
+      SmallVector<Value, 1> empty;
+      SmallVector<Type, 1> retTy;
+      auto newOp = rewriter.create<async::ExecuteOp>(
+          op->getLoc(), retTy, operands, empty,
+          [&](OpBuilder &b, Location loc, ValueRange v) {
+            SmallVector<Value, 1> returnValues;
+            b.create<async::YieldOp>(loc, returnValues);
+          });
+      // auto r = rewriter.create<UnrealizedConversionCastOp>(op->getLoc(),
+      //                    async::TokenType::get(op->getContext()),
+      //                    newOp->getResult(0));
+      // op->getResult(0).replaceAllUsesWith(r.getResult(0));
+      op->getResult(0).replaceAllUsesWith(newOp->getResult(0));
+      rewriter.eraseOp(op);
+      return success();
+    }
+
+    for (auto o : operands) {
+      Value v = o;
+      // if (llvm::isa<air::AsyncTokenType>(o.getType()))
+      //   v = rewriter.create<UnrealizedConversionCastOp>(op->getLoc(),
+      //                   async::TokenType::get(op->getContext()),
+      //                   o).getResult(0);
+      rewriter.create<async::AwaitOp>(op->getLoc(), v);
+    }
+    rewriter.eraseOp(op);
+    return success();
+  }
+};
+//===----------------------------------------------------------------------===//
+// RISCVToAffine RewritePatterns: Func operations
+//===----------------------------------------------------------------------===//
+
+struct FuncOpLowering : public OpConversionPattern<riscv::FuncOp> {
+  using OpConversionPattern<riscv::FuncOp>::OpConversionPattern;
+
+  LogicalResult
+  matchAndRewrite(riscv::FuncOp op, OpAdaptor adaptor,
+                  ConversionPatternRewriter &rewriter) const final {
+    // We only lower the main function as we expect that all other functions
+    // have been inlined.
+    if (op.getName() != "main")
+      return failure();
+
+    // Verify that the given main has no inputs and results.
+    if (op.getNumArguments() || op.getFunctionType().getNumResults()) {
+      return rewriter.notifyMatchFailure(op, [](Diagnostic &diag) {
+        diag << "expected 'main' to have 0 inputs and 0 results";
+      });
+    }
+
+    // Create a new non-dsp function, with the same region.
+    auto func = rewriter.create<mlir::func::FuncOp>(op.getLoc(), op.getName(),
+                                                    op.getFunctionType());
+    rewriter.inlineRegionBefore(op.getRegion(), func.getBody(), func.end());
+    rewriter.eraseOp(op);
+    return success();
+  }
+};
+//===----------------------------------------------------------------------===//
+// RISCVToAffine RewritePatterns: Return operations
+//===----------------------------------------------------------------------===//
+
+struct ReturnOpLowering : public OpRewritePattern<riscv::ReturnOp> {
+  using OpRewritePattern<riscv::ReturnOp>::OpRewritePattern;
+
+  LogicalResult matchAndRewrite(riscv::ReturnOp op,
+                                PatternRewriter &rewriter) const final {
+    // During this lowering, we expect that all function calls have been
+    // inlined.
+    if (op.hasOperand())
+      return failure();
+
+    // We lower "riscv.return" directly to "func.return".
+    rewriter.replaceOpWithNewOp<func::ReturnOp>(op);
+    return success();
+  }
+};
+//===----------------------------------------------------------------------===//
+// RISCVToAffine RewritePatterns: Constant operations
+//===----------------------------------------------------------------------===//
+
+// struct RISCVConstantOpLowering : public OpRewritePattern<riscv::ConstantOp> {
+//   using OpRewritePattern<riscv::ConstantOp>::OpRewritePattern;
+
+//   LogicalResult matchAndRewrite(riscv::ConstantOp op,
+//                                 PatternRewriter &rewriter) const final {
+//     ::mlir::ElementsAttr constantValue = op.getValue();
+//     Location loc = op.getLoc();
+
+//     // When lowering the constant operation, we allocate and assign the constant
+//     // values to a corresponding memref allocation.
+//     auto tensorType = llvm::cast<RankedTensorType>(op.getType());
+//     auto memRefType = convertTensorToMemRef(tensorType);
+//     auto alloc = insertAllocAndDealloc(memRefType, loc, rewriter);
+
+//     // We will be generating constant indices up-to the largest dimension.
+//     // Create these constants up-front to avoid large amounts of redundant
+//     // operations.
+//     auto valueShape = memRefType.getShape();
+//     SmallVector<Value, 8> constantIndices;
+
+//     if (!valueShape.empty()) {
+//       for (auto i : llvm::seq<int64_t>(
+//                0, *std::max_element(valueShape.begin(), valueShape.end())))
+//         constantIndices.push_back(
+//             rewriter.create<arith::ConstantIndexOp>(loc, i));
+//     } else {
+//       // This is the case of a tensor of rank 0.
+//       constantIndices.push_back(
+//           rewriter.create<arith::ConstantIndexOp>(loc, 0));
+//     }
+
+//     // The constant operation represents a multi-dimensional constant, so we
+//     // will need to generate a store for each of the elements. The following
+//     // functor recursively walks the dimensions of the constant shape,
+//     // generating a store when the recursion hits the base case.
+//     SmallVector<Value, 2> indices;
+//     auto valueIt = constantValue.value_begin<FloatAttr>();
+//     std::function<void(uint64_t)> storeElements = [&](uint64_t dimension) {
+//       // The last dimension is the base case of the recursion, at this point
+//       // we store the element at the given index.
+//       if (dimension == valueShape.size()) {
+//         rewriter.create<affine::AffineStoreOp>(
+//             loc, rewriter.create<arith::ConstantOp>(loc, *valueIt++), alloc,
+//             llvm::ArrayRef(indices));
+//         return;
+//       }
+
+//       // Otherwise, iterate over the current dimension and add the indices to
+//       // the list.
+//       for (uint64_t i = 0, e = valueShape[dimension]; i != e; ++i) {
+//         indices.push_back(constantIndices[i]);
+//         storeElements(dimension + 1);
+//         indices.pop_back();
+//       }
+//     };
+
+//     // Start the element storing recursion from the first dimension.
+//     storeElements(/*dimension=*/0);
+
+//     // Replace this operation with the generated alloc.
+//     rewriter.replaceOp(op, alloc);
+//     return success();
+//   }
+// };
+
+
+
+
+struct ArithScalarConstantOpLowering
+    : public mlir::OpConversionPattern<mlir::arith::ConstantOp> {
+  using OpConversionPattern::OpConversionPattern;
+
+  mlir::LogicalResult
+  matchAndRewrite(mlir::arith::ConstantOp op, OpAdaptor adaptor,
+                  mlir::ConversionPatternRewriter &rewriter) const final {
+    // 仅处理标量类型（排除Tensor类型，Tensor由ArithConstantOpLowering处理）
+
+    Location loc = op.getLoc();
+    TypedAttr valueAttr = op.getValue();
+    Type resultType = op.getType();
+
+    // 将arith.constant转为llvm.mlir.constant
+    rewriter.replaceOpWithNewOp<mlir::LLVM::ConstantOp>(
+        op, resultType, valueAttr);
+    return mlir::success();
+  }
+};
 namespace {
 class RISCVToAffineLowerPass
     : public mlir::PassWrapper<RISCVToAffineLowerPass,
@@ -2678,8 +2945,9 @@ public:
 
   void getDependentDialects(mlir::DialectRegistry &registry) const override {
     registry.insert<mlir::affine::AffineDialect, mlir::func::FuncDialect,
-                    mlir::memref::MemRefDialect>();
-  }
+                    mlir::memref::MemRefDialect, mlir::scf::SCFDialect,
+                    mlir::async::AsyncDialect>();
+  }  //这里要加上需要的Dialect，否则链接会出错
 
   void runOnOperation() final;
 };
@@ -2688,12 +2956,15 @@ public:
 void RISCVToAffineLowerPass::runOnOperation() {
   ModuleOp module = getOperation();
   MLIRContext *context = &getContext();
+  mlir::TypeConverter typeConverter;
+
   mlir::ConversionTarget target(getContext());
 
   target.addIllegalDialect<riscv::RISCVDialect>();
   target.addLegalDialect<mlir::affine::AffineDialect, mlir::BuiltinDialect,
                          mlir::func::FuncDialect, mlir::arith::ArithDialect,
-                         mlir::memref::MemRefDialect, mlir::scf::SCFDialect>();
+                         mlir::memref::MemRefDialect, mlir::scf::SCFDialect,
+                         async::AsyncDialect>();
   target.addDynamicallyLegalOp<riscv::PrintOp>([](riscv::PrintOp op) {
     return llvm::none_of(op->getOperandTypes(), [](mlir::Type type) {
       return mlir::isa<mlir::TensorType>(type);
@@ -2702,24 +2973,36 @@ void RISCVToAffineLowerPass::runOnOperation() {
   target.addDynamicallyLegalOp<mlir::arith::ConstantOp>([](mlir::arith::ConstantOp op) {
     return !mlir::isa<mlir::TensorType>(op.getType());
   });
-  target.addLegalOp<riscv::WorldOp>();
+  target.addLegalOp<riscv::WorldOp,arith::ConstantOp>();
 
     // Add type converter
-  mlir::TypeConverter typeConverter;
   typeConverter.addConversion([](mlir::Type type) { return type; });
+
   typeConverter.addConversion([](mlir::TensorType type) -> mlir::Type {
     return convertTensorToMemRef(type);
   });
 
+  //处理未排序的 MemRef 类型（适配 dense_resource 常量）
+  typeConverter.addConversion([](mlir::UnrankedTensorType type) -> mlir::Type {
+    return mlir::UnrankedMemRefType::get(type.getElementType(), 0);
+  });
+
   mlir::RewritePatternSet patterns(&getContext());
-  patterns.add<ScalarConstantOpLowering,TensorConstantOpLowering,ReduceOpLowering,
-  MatmulOpLowering,MatvecOpLowering,TransposeOpLowering,ReshapeOpLowering,
+  patterns.add<
+  ScalarConstantOpLowering,TensorConstantOpLowering,
+  ReduceOpLowering,
+  MatmulOpLowering,MatvecOpLowering,
+  BatchMatmulOpLowering,
+  TransposeOpLowering,
+  ReshapeOpLowering,
   CmpIOpLowering,CmpFOpLowering,AddOpLowering,SubOpLowering,MulOpLowering,DivOpLowering,
   MaxOpLowering,MinOpLowering,AndIOpLowering,XOrIOpLowering,OrIOpLowering,NegFOpLowering,
-  Conv2DOpLowering,WaitAllOpLowering,LaunchOpLowering,
-  LoadOpLowering, StoreOpLowering,
+  Conv2DOpLowering,LaunchOpLowering,
   GMEMAllocOpConversion,GMEMDeallocOpConversion,
-  LMEMAllocOpConversion,LMEMDeallocOpConversion>(&getContext());
+  WaitAllOpLoweringToAsync,
+  ReturnOpLowering,FuncOpLowering>(&getContext());
+  
+  // patterns.add<PrintOpLowering>(typeConverter, &getContext());
   
   patterns.add<PrintOpLowering, ArithConstantOpLowering>(typeConverter, &getContext());
 

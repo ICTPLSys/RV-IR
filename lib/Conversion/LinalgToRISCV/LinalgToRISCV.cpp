@@ -20,6 +20,16 @@
 #include "torch-mlir/Conversion/RISCVPasses.h"
 // #include "torch-mlir/Conversion/Passes.h"
 
+#include "mlir/Dialect/MemRef/IR/MemRef.h"
+#include "mlir/Dialect/Bufferization/Transforms/Bufferize.h"
+#include "mlir/Conversion/BufferizationToMemRef/BufferizationToMemRef.h"
+#include "mlir/Conversion/LinalgToStandard/LinalgToStandard.h"
+#include "mlir/Dialect/SCF/IR/SCF.h"
+
+#include "mlir/Dialect/Arith/IR/Arith.h"
+#include "mlir/Dialect/Bufferization/IR/Bufferization.h"
+#include "mlir/Dialect/Bufferization/Transforms/Passes.h"
+#include "mlir/Dialect/Affine/IR/AffineOps.h"
 
 
 #include "mlir/Dialect/Linalg/IR/Linalg.h"
@@ -28,7 +38,9 @@
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Pass/Pass.h"
 #include "mlir/Transforms/DialectConversion.h"
+#include "llvm/ADT/FloatingPointMode.h"
 #include "llvm/ADT/Sequence.h"
+
 
 using namespace mlir;
 
@@ -48,16 +60,46 @@ struct LinalgMatmulToRISCVMatmul : public OpConversionPattern<linalg::MatmulOp> 
     Value output = adaptor.getOutputs()[0];
     
     // Check if the output is a tensor
-    auto outputType = dyn_cast<RankedTensorType>(output.getType());
+    // auto outputType = dyn_cast<RankedTensorType>(output.getType());
+    auto outputType = dyn_cast<MemRefType>(output.getType());
     if (!outputType) {
       return rewriter.notifyMatchFailure(op, "output is not a tensor");
     }
     
     // Create riscv.matmul operation
-    auto matmulOp = rewriter.create<riscv::MatmulOp>(op.getLoc(), outputType, lhs, rhs);
+    // auto matmulOp = rewriter.create<riscv::MatmulOp>(op.getLoc(), outputType, lhs, rhs);
+    auto matmulOp = rewriter.create<riscv::MatmulOp>(op.getLoc(), lhs, rhs, output);
     
     // Replace the linalg.matmul with riscv.matmul
-    rewriter.replaceOp(op, matmulOp.getResult());
+    rewriter.replaceOp(op, matmulOp->getResults());
+    return success();
+  }
+};
+//===----------------------------------------------------------------------===//
+// Linalg to RISCV Lowering Patterns
+// @brief: Pattern to lower linalg.batch_matmul to riscv.batch_matmul
+//===----------------------------------------------------------------------===//
+struct LinalgBatchMatmulToRISCVMatmul : public OpConversionPattern<linalg::BatchMatmulOp> {
+  using OpConversionPattern::OpConversionPattern;
+
+  LogicalResult
+  matchAndRewrite(linalg::BatchMatmulOp op, OpAdaptor adaptor,
+                  ConversionPatternRewriter &rewriter) const override {
+    // Get the input and output operands
+    Value lhs = op.getInputs()[0];
+    Value rhs = op.getInputs()[1];
+    Value output = op.getOutputs()[0];
+    auto lhsType = dyn_cast<MemRefType>(lhs.getType());
+    auto rhsType = dyn_cast<MemRefType>(rhs.getType());
+    auto outputType = dyn_cast<MemRefType>(output.getType());
+    // Create riscv.batch_matmul operation
+    auto batchMatmulOp = rewriter.create<riscv::BatchMatMulOp>(
+        op.getLoc(),  
+        lhs, rhs, 
+        output               
+    );
+    
+   rewriter.replaceOp(op, batchMatmulOp->getResults());
     return success();
   }
 };
@@ -170,35 +212,107 @@ struct LinalgConv2DToRISCVConv2D : public OpConversionPattern<linalg::Conv2DOp> 
 
 
 // Pattern to lower linalg.transpose to riscv.transpose
-struct LinalgTransposeToRISCVTranspose : public OpConversionPattern<linalg::TransposeOp> {
-  using OpConversionPattern<linalg::TransposeOp>::OpConversionPattern;
+// struct LinalgTransposeToRISCVTranspose : public OpConversionPattern<linalg::TransposeOp> {
+//   using OpConversionPattern::OpConversionPattern;
 
-  LogicalResult
-  matchAndRewrite(linalg::TransposeOp op, OpAdaptor adaptor,
-                  ConversionPatternRewriter &rewriter) const override {
-    // Get the input tensor
-    Value input = adaptor.getInput();
+//   LogicalResult matchAndRewrite(
+//       linalg::TransposeOp linalgTranspose, // 待转换的linalg.transpose Op
+//       OpAdaptor adaptor,                   // 适配后的操作数（类型转换后）
+//       ConversionPatternRewriter &rewriter) const override {
+  
+//     Value input = linalgTranspose.getInput();
+//     Value init = linalgTranspose.getInit();
+//     auto inputMemRefType = dyn_cast<MemRefType>(input.getType());
+//     auto initMemRefType = dyn_cast<MemRefType>(init.getType());
+//     auto permutation = linalgTranspose.getPermutation();
+//     if (permutation.size() != 2 || permutation[0] != 1 || permutation[1] != 0) {
+//       return rewriter.notifyMatchFailure(linalgTranspose, "permutation must be [1, 0]");
+//     }
+
+//     // 创建 riscv.transpose Op，替换原 linalg.transpose
+//     // 注意：缓冲化后的 linalg.transpose 无返回值，直接原地修改 init
+//     auto transposeOp = rewriter.create<riscv::TransposeOp>(
+//         linalgTranspose.getLoc(),    // 复用原 Op 的位置信息
+//         // initMemRefType,              // 返回值类型（和 init 一致）
+//         input,                       // 输入 memref
+//         init,                        // 输出 memref
+//         rewriter.getDenseI64ArrayAttr(permutation) // permutation 属性
+//     );
+//     // rewriter.replaceOp(linalgTranspose, transposeOp.getResult());
+//     rewriter.eraseOp(linalgTranspose);
+//     return success();
+//   }
+// };
+
+// Pattern to lower linalg.transpose to riscv.transpose
+struct LinalgTransposeToRISCVTranspose : public OpConversionPattern<linalg::TransposeOp> {
+  using OpConversionPattern::OpConversionPattern;
+
+  LogicalResult matchAndRewrite(
+      linalg::TransposeOp linalgTranspose,
+      OpAdaptor adaptor,
+      ConversionPatternRewriter &rewriter) const override {
+  
+    Value input = linalgTranspose.getInput();
+    Value init = linalgTranspose.getInit();
     
-    // Get the output type
-    auto outputType = dyn_cast<RankedTensorType>(op.getInit().getType());
-    if (!outputType) {
-      return rewriter.notifyMatchFailure(op, "output is not a tensor");
+    if (!isa<MemRefType>(input.getType()) || !isa<MemRefType>(init.getType())) {
+      return rewriter.notifyMatchFailure(linalgTranspose, "input and init must be MemRefType");
     }
-    
-    // Check if it's a simple 2D transpose (permutation is [1, 0])
-    auto permutation = op.getPermutation();
-    if (permutation.size() != 2 || permutation[0] != 1 || permutation[1] != 0) {
-      return rewriter.notifyMatchFailure(op, "only 2D transpose with [1, 0] permutation is supported");
+
+    auto permutation = linalgTranspose.getPermutation();
+    int64_t inputRank = cast<MemRefType>(input.getType()).getRank();
+    if (permutation.size() != inputRank) {
+      return rewriter.notifyMatchFailure(linalgTranspose, "permutation rank mismatch with input");
     }
-    
-    // Create riscv.transpose operation
-    auto transposeOp = rewriter.create<riscv::TransposeOp>(op.getLoc(), outputType, input);
-    
-    // Replace the linalg.transpose with riscv.transpose
-    rewriter.replaceOp(op, transposeOp.getResult());
+
+    rewriter.create<riscv::TransposeOp>(
+        linalgTranspose.getLoc(),
+        input,
+        init,
+        rewriter.getDenseI64ArrayAttr(permutation)
+    );
+
+    rewriter.eraseOp(linalgTranspose);
     return success();
   }
 };
+
+// struct LinalgTransposeToRISCVTranspose : public OpConversionPattern<linalg::TransposeOp> {
+//   using OpConversionPattern<linalg::TransposeOp>::OpConversionPattern;
+
+//   LogicalResult
+//   matchAndRewrite(linalg::TransposeOp op, OpAdaptor adaptor,
+//                   ConversionPatternRewriter &rewriter) const override {
+//     // Get the input tensor
+//     Value input = adaptor.getInput();
+//     // Get the output type
+//     auto outputType = dyn_cast<RankedTensorType>(op.getInit().getType());
+//     // if (!outputType) {
+//     //   return rewriter.notifyMatchFailure(op, "output is not a tensor");
+//     // }
+//     // Check if it's a simple 2D transpose (permutation is [1, 0])
+//     // auto permutation = op.getPermutation();
+//     // if (permutation.size() != 2 || permutation[0] != 1 || permutation[1] != 0) {
+//     //   return rewriter.notifyMatchFailure(op, "only 2D transpose with [1, 0] permutation is supported");
+//     // }
+
+//     SmallVector<int64_t> transpValues = {1, 0};
+//     auto transpAttr = rewriter.getI64ArrayAttr(transpValues);
+//     auto transposeOp = rewriter.create<riscv::TransposeOp>(
+//         op.getLoc(),          // 位置信息
+//         outputType,           // 输出张量类型
+//         input,                // 输入张量
+//         transpAttr            // transp属性
+//     );
+    
+//     // Replace the linalg.transpose with riscv.transpose
+//     rewriter.replaceOp(op, transposeOp.getResult());
+//     return success();
+//   }
+
+// };
+
 
 // Pattern to lower linalg.elemwise_binary to riscv binary ops
 template <typename LinalgOp, typename RISCVOp>
@@ -469,12 +583,44 @@ struct LinalgMinToRISCVMin : public OpConversionPattern<linalg::MinOp> {
     }
     
     auto maxOp = rewriter.create<riscv::MinOp>(op.getLoc(), outputType, lhs, rhs);
-      rewriter.replaceOp(op, maxOp.getResult());
+    rewriter.replaceOp(op, maxOp.getResult());
     
     return success();
   }
 };
 
+// Pattern to lower linalg.pooling_nchw_max to riscv.pooling_nchw_max
+struct LinalgPoolingNchwMaxToRISCV
+    : public OpConversionPattern<linalg::PoolingNchwMaxOp> {
+  using OpConversionPattern<
+      linalg::PoolingNchwMaxOp>::OpConversionPattern;
+
+  LogicalResult
+  matchAndRewrite(linalg::PoolingNchwMaxOp op,
+                  OpAdaptor adaptor,
+                  ConversionPatternRewriter &rewriter) const override {
+
+    Value input = adaptor.getInputs()[0];
+    Value kernel = adaptor.getInputs()[1];
+    Value output = adaptor.getOutputs()[0];
+
+    auto dilations =
+        op->getAttrOfType<TypedAttr>("dilations");
+    auto strides =
+        op->getAttrOfType<TypedAttr>("strides");
+
+    auto newOp = rewriter.create<riscv::PoolingNchwMaxOp>(
+        op.getLoc(),
+        TypeRange{},
+        ValueRange{input, kernel, output},
+        ArrayRef<NamedAttribute>{
+            rewriter.getNamedAttr("dilations", dilations),
+            rewriter.getNamedAttr("strides", strides)});
+
+    rewriter.replaceOp(op, newOp->getResults());
+    return success();
+  }
+};
 //===----------------------------------------------------------------------===//
 // Pass Definition
 //===----------------------------------------------------------------------===//
@@ -494,7 +640,9 @@ public:
 
   void getDependentDialects(mlir::DialectRegistry &registry) const override {
     registry.insert<riscv::RISCVDialect, mlir::linalg::LinalgDialect,
-                    mlir::tensor::TensorDialect, mlir::arith::ArithDialect>();
+                    mlir::memref::MemRefDialect,scf::SCFDialect,
+                    bufferization::BufferizationDialect,func::FuncDialect,
+                     mlir::arith::ArithDialect>();
   }
 
   void runOnOperation() final;
@@ -512,7 +660,7 @@ void LinalgToRISCVLowerPass::runOnOperation() {
                          mlir::func::FuncDialect, 
                          mlir::arith::ArithDialect,
                          mlir::tensor::TensorDialect>();
-  
+
   // Mark specific Linalg ops as illegal if they can be converted to RISCV
   target.addIllegalOp<linalg::MatmulOp>();
   target.addIllegalOp<linalg::MatvecOp>();
@@ -526,10 +674,12 @@ void LinalgToRISCVLowerPass::runOnOperation() {
   target.addIllegalOp<linalg::NegFOp>();
   target.addIllegalOp<linalg::MaxOp>();
   target.addIllegalOp<linalg::MinOp>();
-
+  target.addIllegalOp<linalg::BatchMatmulOp>();
+  target.addIllegalOp<linalg::PoolingNchwMaxOp>();
   
   // Keep other Linalg ops legal (they will not be converted)
   target.addLegalDialect<mlir::linalg::LinalgDialect>();
+  
   target.addDynamicallyLegalDialect<mlir::linalg::LinalgDialect>(
       [](Operation *op) {
         // These specific ops are illegal, all others are legal
@@ -537,11 +687,13 @@ void LinalgToRISCVLowerPass::runOnOperation() {
                     linalg::TransposeOp, linalg::ReduceOp, 
                     linalg::AddOp, linalg::SubOp,
                     linalg::MulOp, linalg::DivOp, 
-                    linalg::MaxOp,linalg::MinOp,
+                    linalg::MaxOp, linalg::MinOp,
                     linalg::NegFOp, linalg::Conv2DOp>(op);
       });
 
   mlir::RewritePatternSet patterns(&getContext());
+  // mlir::linalg::populateLinalgToStandardConversionPatterns(patterns);
+  
   patterns.add<LinalgMatmulToRISCVMatmul,
                LinalgMatvecToRISCVMatvec,
                LinalgReduceToRISCVReduce,
@@ -553,7 +705,9 @@ void LinalgToRISCVLowerPass::runOnOperation() {
                LinalgDivToRISCVDiv,
                LinalgNegFToRISCVNegF,
                LinalgMaxToRISCVMax,
-               LinalgMinToRISCVMin>(&getContext());
+               LinalgMinToRISCVMin,
+               LinalgBatchMatmulToRISCVMatmul,
+               LinalgPoolingNchwMaxToRISCV>(&getContext());
 
   if (mlir::failed(mlir::applyPartialConversion(getOperation(), target,
                                                 std::move(patterns)))) {
@@ -566,3 +720,4 @@ namespace riscv{
     return std::make_unique<LinalgToRISCVLowerPass>();
   }
 }
+

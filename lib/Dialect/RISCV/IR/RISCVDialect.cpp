@@ -149,11 +149,11 @@ void ConstantOp::build(OpBuilder &builder, OperationState &state, int64_t value)
 //===----------------------------------------------------------------------===//
 // TransposeOp
 //===----------------------------------------------------------------------===//
-void TransposeOp::build(mlir::OpBuilder &builder, mlir::OperationState &state,
-                        mlir::Value value) {
-  state.addTypes(UnrankedTensorType::get(builder.getF64Type()));
-  state.addOperands(value);
-}
+// void TransposeOp::build(mlir::OpBuilder &builder, mlir::OperationState &state,
+//                         mlir::Value value) {
+//   state.addTypes(UnrankedTensorType::get(builder.getF64Type()));
+//   state.addOperands(value);
+// }
 
 // LogicalResult TransposeOp::inferReturnTypes(
 //     MLIRContext *context, std::optional<Location> location,
@@ -653,6 +653,44 @@ uint64_t riscv::HerdOp::getNumRows() {
   auto rows = getSizeOperands()[1].getDefiningOp();
   return cast<arith::ConstantIndexOp>(rows).value();
 }
+//===----------------------------------------------------------------------===//
+// FuncOp
+//===----------------------------------------------------------------------===//
+
+void riscv::FuncOp::build(mlir::OpBuilder &builder, mlir::OperationState &state,
+                   llvm::StringRef name, mlir::FunctionType type,
+                   llvm::ArrayRef<mlir::NamedAttribute> attrs) {
+  // FunctionOpInterface provides a convenient `build` method that will populate
+  // the state of our FuncOp, and create an entry block.
+  buildWithEntryBlock(builder, state, name, type, attrs, type.getInputs());
+}
+
+mlir::ParseResult FuncOp::parse(mlir::OpAsmParser &parser,
+                                mlir::OperationState &result) {
+  // Dispatch to the FunctionOpInterface provided utility method that parses the
+  // function operation.
+  auto buildFuncType =
+      [](mlir::Builder &builder, llvm::ArrayRef<mlir::Type> argTypes,
+         llvm::ArrayRef<mlir::Type> results,
+         mlir::function_interface_impl::VariadicFlag,
+         std::string &) { return builder.getFunctionType(argTypes, results); };
+
+  return mlir::function_interface_impl::parseFunctionOp(
+      parser, result, /*allowVariadic=*/false,
+      getFunctionTypeAttrName(result.name), buildFuncType,
+      getArgAttrsAttrName(result.name), getResAttrsAttrName(result.name));
+}
+
+void FuncOp::print(mlir::OpAsmPrinter &p) {
+  // Dispatch to the FunctionOpInterface provided utility method that prints the
+  // function operation.
+  mlir::function_interface_impl::printFunctionOp(
+      p, *this, /*isVariadic=*/false, getFunctionTypeAttrName(),
+      getArgAttrsAttrName(), getResAttrsAttrName());
+}
+//===----------------------------------------------------------------------===//
+// ReturnOp
+//===----------------------------------------------------------------------===//
 
 mlir::Operation *RISCVDialect::materializeConstant(mlir::OpBuilder &builder,
                                                    mlir::Attribute value,

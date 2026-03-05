@@ -37,8 +37,10 @@ def ConstantOp : RISCV_Op<"constant", [Pure]> {
     }]>,
     OpBuilder<(ins "double":$value)>,
     OpBuilder<(ins "int64_t":$value)>
-    
+    // OpBuilder<(ins "int":$value)>
   ];
+  // let results = (outs RISCVTensor);
+  // let arguments = (ins ElementsAttr:$value);
   // let results = (outs RISCVTensor);
   let arguments = (ins TypedAttrInterface:$value);
   let results = (outs AnyType:$result);
@@ -65,7 +67,7 @@ def PrintOp : RISCV_Op<"print", [Pure]> {
     let assemblyFormat = "$input attr-dict `:` type($input)";
 }
 
-// RISC-V 可扩展 Accelerate ISA
+
 //===----------------------------------------------------------------------===//
 // MatMulOp
 //===----------------------------------------------------------------------===//
@@ -80,21 +82,59 @@ def MatmulOp : RISCV_Op<"matmul", [Pure]> {
       
       Example MatMul:
       ```mlir
-        %2 = "riscv.matmul"(%0, %1) : (tensor<2x3xf64>, tensor<3x4xf64>) -> tensor<2x4xf64>
+      riscv.matmul ins(%lhs, %rhs : memref<2x3xf64>, memref<3x4xf64s>)
+                   outs(%out : memref<2x4xf64>)
       ```
     }];
 
-    let arguments = (ins RISCVTensor:$lhs, RISCVTensor:$rhs);
-    let results = (outs RISCVTensor);
-
-    // Indicate that the operation has a custom parser and printer method.
-    // let hasCustomAssemblyFormat = 1;
+    let arguments = (ins AnyMemRef:$lhs, AnyMemRef:$rhs, AnyMemRef:$output);
+    let results = (outs);
 
     // Allow building a MatMulOp with from the two input operands.
     let builders = [
       OpBuilder<(ins "mlir::Value":$lhs, "mlir::Value":$rhs)>
     ];
+    let assemblyFormat = [{
+    `ins` `(` $lhs `,` $rhs `:` type($lhs) `,` type($rhs) `)`
+    `outs` `(` $output `:` type($output) `)`
+    attr-dict
+    }];
+
 }
+// RISC-V 可扩展 Accelerate ISA
+//===----------------------------------------------------------------------===//
+// BatchMatMulOp
+//===----------------------------------------------------------------------===//
+def BatchMatMulOp : RISCV_Op<"batch_matmul", [Pure]> {
+  let summary = [{
+    Performs an in-place batch matrix multiplication.
+  }];
+
+  let description = [{
+    The "batchmatmul" operation performs batch matrix multiplication:
+    for each batch b:
+      output[b] = lhs[b] * rhs[b]
+
+    All operands are memrefs. The result is written into `output`.
+
+    Example:
+    ```mlir
+    riscv.batch_matmul ins(%lhs, %rhs : memref<1x128x2048xf32>, memref<1x2048x8192xf32>)
+                      outs(%out : memref<1x128x8192xf32>)
+    ```
+  }];
+
+  // In-place semantics: no results
+  let arguments = (ins AnyMemRef:$lhs, AnyMemRef:$rhs, AnyMemRef:$output);
+  let results = (outs);
+
+  let assemblyFormat = [{
+    `ins` `(` $lhs `,` $rhs `:` type($lhs) `,` type($rhs) `)`
+    `outs` `(` $output `:` type($output) `)`
+    attr-dict
+  }];
+}
+
 //===----------------------------------------------------------------------===//
 // MatvecOp
 //===----------------------------------------------------------------------===//
@@ -175,6 +215,7 @@ def ReduceOp : RISCV_Op<"reduce", [Pure]> {
 //===----------------------------------------------------------------------===//
 // TransposeOp
 //===----------------------------------------------------------------------===//
+
 def TransposeOp : RISCV_Op<"transpose", [Pure]> {
     // [Pure, DeclareOpInterfaceMethods<ShapeInferenceOpInterface>]> {
 
@@ -182,28 +223,21 @@ def TransposeOp : RISCV_Op<"transpose", [Pure]> {
   let description = [{
     Example:
     ```mlir
-      %1 = "riscv.transpose"(%0) : (tensor<2x3xf64>) -> (tensor<3x2xf64>)
+      riscv.transpose ins(%0 : memref<64x32xf32>) outs(%alloc : memref<32x64xf32>) {permutation = array<i64: 1, 0>}
       ```
   }];
-  let arguments = (ins RISCVTensor:$input, I64ArrayAttr:$transp);
-  // let arguments = (ins RISCVTensor:$input);
+  let arguments = (ins
+    AnyMemRef :$input,       
+    AnyMemRef :$init,         
+    DenseI64ArrayAttr:$permutation  // 转置维度
+  );
 
-  let results = (outs RISCVTensor: $result);
-
-    let assemblyFormat = [{
-    $input attr-dict `:` type($input) `->` type($result)
+  let assemblyFormat = [{
+    `ins` `(` $input `:` type($input) `)` `outs` `(` $init `:` type($init) `)` attr-dict
   }];
 
-  // Enable registering canonicalization patterns with this operation.
-  // let hasCanonicalizer = 1;
-
-  // Allow building a TransposeOp with from the input operand.
-  let builders = [
-    OpBuilder<(ins "mlir::Value":$input)>
-  ];
-  // Indicate that additional verification for this operation is necessary.
-  // let hasVerifier = 1;
 }
+
 //===----------------------------------------------------------------------===//
 // ReshapeOp
 //===----------------------------------------------------------------------===//
@@ -230,12 +264,6 @@ def ReshapeOp : RISCV_Op<"reshape", [
   let extraClassDeclaration = [{
     mlir::Type getResultType() { return getResult().getType(); }
   }];
-
-  // let assemblyFormat = [{
-  //   $source `(` $shape `)` attr-dict `:` functional-type(operands, results)
-  // }];
-
-  // let hasVerifier = 1;
 
 }
 //===----------------------------------------------------------------------===//
@@ -452,7 +480,7 @@ def XOrIOp : RISCV_Op<"xori",
   let results = (outs SignlessIntegerLike);
 }
 //===----------------------------------------------------------------------===//
-// OrIOp
+// OrIOp   
 //===----------------------------------------------------------------------===//
 
 def OrIOp : RISCV_Op<"ori",
@@ -618,6 +646,8 @@ def Conv2DOp : RISCV_Op<"conv2d",
     let summary = "RISCV dialect convolution 2d operation";
     let description = [{
         Performs a 2D convolution on the input tensor using specified kernel.
+        Example:
+        %output = "riscv.conv2d"(%input, %kernel) : (tensor<4x4xf32>, tensor<2x2xf32>) -> tensor<3x3xf32>
     }];
 
     let arguments = (ins RISCVTensor:$input, RISCVTensor:$kernel);
@@ -684,6 +714,7 @@ def LaunchOp : RISCV_Op<"launch", [  RISCV_AsyncOpInterface,
         return {};
       return getKernelArgument(std::distance(kernelOperands.begin(), it));
     }
+
     /// Return the operand that corresponds to the given kernel argument.
     /// Return "nullptr" if the given block argument is not a kernel argument
     /// of this op.
@@ -853,7 +884,7 @@ def DeallocOp: RISCV_Op<"dealloc", []> {
   // let hasCanonicalizer  = 1;
 }
 //===----------------------------------------------------------------------===//
-// Template of *_DRV
+// Template of *_DRV  
 //===----------------------------------------------------------------------===//
 class RISCV_DRV_Op<string opName> : RISCV_Op<opName,
       [RISCV_AsyncOpInterface,
@@ -935,9 +966,233 @@ def WaitAllOp: RISCV_Op<"wait_all", [RISCV_AsyncOpInterface]> {
   // }];
   // let hasCanonicalizer = 1;
 }
+//===----------------------------------------------------------------------===//
+// QuantizationOp
+//===----------------------------------------------------------------------===//
+// def QuantizationOp : RISCV_Op<"quantization",
+//     [Pure]> {
+//   let summary = "quantization operation";
+//   let description = [{
+//     y_quantized[i] = Round(a[i] - min) / step) * step + min
+//         where, step = (max-min)/NoOfLevels 
+    
+//     The "quantization" operation steps:
+//     1) calulate NoOfLevels = 2^NoOfBits -- separate
+//     2) Then calculate stepSize = (Max-Min)/NoOfLevels
+//     3) iterate for all the elements and calculate quantizedCoeff
+
+//     GetLevelForVal =  (a[i] - min)/step
+//     RoundedVal = arith.FPToSI(GetLevelForVal)
+//     QuantVal = RoundedVal * step + min_val
+
+//     ex: Original coefficients: [ 3.2 -1.5  0.8 -2.9  4.5] & numLevels = 16, max=5, min=-5
+//         Quantized coefficients: [ 3.125 -1.25   0.625 -3.125  4.375]
+//   }];
+
+//   let arguments = (ins RISCVTensor:$input, RISCVTensor:$Nlevels, RISCVTensor:$max, RISCVTensor:$min);
+//   let results = (outs RISCVTensor);
+
+//   // Enable registering canonicalization patterns with this operation.
+//   // let hasCanonicalizer = 1;
+
+//   // Allow building a LowpassFilter with from the input operand.
+//   let builders = [
+//     OpBuilder<(ins "mlir::Value":$input, "mlir::Value":$Nlevels, "mlir::Value":$max, "mlir::Value":$min)>
+//   ];
+
+//   // Indicate that additional verification for this operation is necessary.
+//   // let hasVerifier = 1;
+// }
+// def DequantizationOp : RISCV_Op<"dequantization",
+//     [Pure]> {
+//   let summary = "dequantization operation";
+//   let description = [{
+//     a_recovered[i] = quant_data[i] * step + min
+//         where, step = (max - min) / NoOfLevels 
+    
+//     The "dequantization" operation steps:
+//     1) Use the same NoOfLevels as quantization process -- separate
+//     2) Calculate stepSize = (Max - Min) / NoOfLevels
+//     3) Iterate for all the elements and calculate recoveredCoeff
+
+//     QuantLevel = quant_data[i]
+//     RecoveredVal = QuantLevel * step + min_val
+
+//     ex: Quantized coefficients: [ 3.125 -1.25   0.625 -3.125  4.375] & numLevels = 16, max=5, min=-5
+//         Recovered coefficients: [ 3.125 -1.25   0.625 -3.125  4.375]
+//   }];
+
+//   let arguments = (ins RISCVTensor:$quant_input, RISCVTensor:$Nlevels, RISCVTensor:$max, RISCVTensor:$min);
+//   let results = (outs RISCVTensor);
+
+//   let builders = [
+//     OpBuilder<(ins "mlir::Value":$quant_input, "mlir::Value":$Nlevels, "mlir::Value":$max, "mlir::Value":$min)>
+//   ];
+
+//   // let hasVerifier = 1;
+// }
 
 //===----------------------------------------------------------------------===//
-// WorldOp
+// FuncOp 
+//===----------------------------------------------------------------------===//
+
+def FuncOp : RISCV_Op<"func", [
+     FunctionOpInterface,IsolatedFromAbove
+  ]> {
+  let summary = "user defined function operation";
+  let description = [{
+    The "riscv.func" operation represents a user defined function. These are
+    callable SSA-region operations that contain RISCV computations.
+
+    Example:
+
+    ```mlir
+    riscv.func @main() {
+      %0 = riscv.constant dense<5.500000e+00> : tensor<f64>
+      %1 = riscv.reshape(%0 : tensor<f64>) to tensor<2x2xf64>
+      riscv.print %1 : tensor<2x2xf64>
+      riscv.return
+    }
+    ```
+  }];
+
+  let arguments = (ins
+    SymbolNameAttr:$sym_name,
+    TypeAttrOf<FunctionType>:$function_type,
+    OptionalAttr<DictArrayAttr>:$arg_attrs,
+    OptionalAttr<DictArrayAttr>:$res_attrs
+  );
+  let regions = (region AnyRegion:$body);
+
+  let builders = [OpBuilder<(ins
+    "::mlir::StringRef":$name, "::mlir::FunctionType":$type,
+    CArg<"::mlir::ArrayRef<::mlir::NamedAttribute>", "{}">:$attrs)
+  >];
+  let extraClassDeclaration = [{
+    //===------------------------------------------------------------------===//
+    // FunctionOpInterface Methods
+    //===------------------------------------------------------------------===//
+
+    /// Returns the argument types of this function.
+    ::mlir::ArrayRef<::mlir::Type> getArgumentTypes() { return getFunctionType().getInputs(); }
+
+    /// Returns the result types of this function.
+    ::mlir::ArrayRef<::mlir::Type> getResultTypes() { return getFunctionType().getResults(); }
+
+    /// Returns the region on the function operation that is callable.
+    ::mlir::Region *getCallableRegion() { return &getBody(); }
+  }];
+  let hasCustomAssemblyFormat = 1;
+  let skipDefaultBuilders = 1;
+}
+//===----------------------------------------------------------------------===//
+// ReturnOp
+//===----------------------------------------------------------------------===//
+
+def ReturnOp : RISCV_Op<"return", [Pure, HasParent<"FuncOp">,
+                                 Terminator]> {
+  let summary = "return operation";
+  let description = [{
+    The "return" operation represents a return operation within a function.
+    The operation takes an optional tensor operand and produces no results.
+    The operand type must match the signature of the function that contains
+    the operation. For example:
+
+    ```mlir
+      riscv.func @foo() -> tensor<2xf64> {
+        ...
+        riscv.return %0 : tensor<2xf64>
+      }
+    ```
+  }];
+
+  // The return operation takes an optional input operand to return. This
+  // value must match the return type of the enclosing function.
+  let arguments = (ins Variadic<RISCVTensor>:$input);
+
+  // The return operation only emits the input in the format if it is present.
+  let assemblyFormat = "($input^ `:` type($input))? attr-dict ";
+
+  // Allow building a ReturnOp with no return operand.
+  let builders = [
+    OpBuilder<(ins), [{ build($_builder, $_state, std ::nullopt); }]>
+  ];
+
+  // Provide extra utility definitions on the c++ operation class definition.
+  let extraClassDeclaration = [{
+    bool hasOperand() { return getNumOperands() != 0; }
+  }];
+
+  // Indicate that additional verification for this operation is necessary.
+  // let hasVerifier = 1;
+}
+//===----------------------------------------------------------------------===//
+// Base class for NCHW pooling ops   
+//===----------------------------------------------------------------------===//
+class PoolingNchwBaseOp<string mnemonic, string opDoc>
+  : RISCV_Op<mnemonic, [Pure]> {
+
+  let summary = opDoc;
+  let description = [{
+    The operation performs 2D pooling
+    on an input tensor in NCHW layout.
+
+    For each batch n and channel c:
+      output[n, c, h, w] =
+        reduction over kh, kw:
+          input[n, c,
+                h * stride_h + kh * dilation_h,
+                w * stride_w + kw * dilation_w]
+
+    All operands are memrefs. The result is written into `output`.
+
+    Example:
+    ```mlir
+    riscv.}] # mnemonic # [{
+      {dilations = dense<[1, 1]> : vector<2xi64>,
+       strides   = dense<[2, 2]> : vector<2xi64>}
+      ins(%input, %kernel : memref<1x64x114x114xf32>, memref<3x3xf32>)
+      outs(%output : memref<1x64x56x56xf32>)
+    ```
+  }];
+
+  let arguments = (ins
+    AnyMemRef:$input,
+    AnyMemRef:$kernel,
+    AnyMemRef:$output,
+    TypedAttrInterface:$dilations,
+    TypedAttrInterface:$strides
+  );
+
+  let results = (outs);
+
+  let assemblyFormat = [{
+    attr-dict
+    `ins` `(` $input `,` $kernel `:`
+      type($input) `,` type($kernel) `)`
+    `outs` `(` $output `:` type($output) `)`
+  }];
+}
+//===----------------------------------------------------------------------===//
+// PoolingNchwMaxOp  对NCHW格式输入执行窗口内的元素取最大值的池化操作
+//===----------------------------------------------------------------------===//
+def PoolingNchwMaxOp
+  : PoolingNchwBaseOp<"pooling_nchw_max",
+                      "Performs NCHW max pooling.">;
+//===----------------------------------------------------------------------===//
+// PoolingNchwSumOp 对NCHW格式输入执行窗口内的元素求和的池化操作
+//===----------------------------------------------------------------------===//
+def PoolingNchwSumOp
+  : PoolingNchwBaseOp<"pooling_nchw_sum",
+                      "Performs NCHW sum pooling.">;
+//===----------------------------------------------------------------------===//
+// Conv2dNchwFchw   对每个输出位置，计算输入对应区域与卷积核的逐元素相乘再求和
+//===----------------------------------------------------------------------===//
+def Conv2dNchwFchwOp
+  : PoolingNchwBaseOp<"conv_2d_nchw_fchw",
+                      "Performs NCHW conv2d.">;
+//===----------------------------------------------------------------------===//
+// WorldOp 
 //===----------------------------------------------------------------------===//
 def WorldOp : RISCV_Op<"world", [Pure]> {
     let summary = "print RISCV, World";
@@ -946,6 +1201,5 @@ def WorldOp : RISCV_Op<"world", [Pure]> {
         no results.
     }];
 }
-
 
 #endif // RISCV_OPS

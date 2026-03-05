@@ -19,6 +19,7 @@ add_mlir_conversion_library(MLIRLinalgToRISCV
     MLIRReconcileUnrealizedCasts
     MLIRLLVMDialect
     MLIRRISCVDialect   #必须添加，否则出现链接错误
+    MLIRLinalgToStandard
     MLIRAffineToStandard
     MLIRSCFToControlFlow
     MLIRArithToLLVM

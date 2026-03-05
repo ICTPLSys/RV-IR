@@ -19,7 +19,7 @@ add_mlir_conversion_library(MLIRCIMToLLVM
     MLIRTransformUtils
     MLIRReconcileUnrealizedCasts
     MLIRLLVMDialect
-    #MLIRRISCVDialect
+    MLIRRISCVDialect
     MLIRCIMDialect
     MLIRAffineToStandard
     MLIRSCFToControlFlow
