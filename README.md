@@ -21,43 +21,35 @@
 # RV-IR
 
 > RV-IR is a research-oriented fork of upstream torch-mlir, focusing on
->RISC-V backends and CIM-related IR extensions.
->Internally, RV-IR reuses the torch-mlir https://github.com/llvm/torch-mlir build system, tools, and
->Python bindings.
+> RISC-V backends and CIM-related IR extensions.
+> Internally, RV-IR reuses the torch-mlir https://github.com/llvm/torch-mlir build system, tools, and
+> Python bindings.
 
 ## RISC-V Dialect Design
 
 RV-IR introduces a custom **RISCV Dialect** to model RISC-V and CIM-oriented execution semantics at the MLIR level.
 
 **Dialect design and operation specifications:**
-
 - https://i02plfgfarl.feishu.cn/wiki/UzuMwmKE7iKmgtkOIp1c4JhonEh
 
 This document describes:
-
 - Core RISCV dialect operations and type system
 - Asynchronous and memory-related operations
 - Design rationale for mapping high-level ops to RISC-V backends
 - Extension points for CIM-specific instructions
 
-## Hardware Architecture
-
 ## Hardware Operator Library
 
 RV-IR targets a specific class of RISC-V–based CIM hardware platforms. The corresponding hardware operator library defines the semantic contract between IR-level operations and hardware execution.
 
-**Underlying hardware operator specification:**
-
-<!-- - https://i02plfgfarl.feishu.cn/wiki/ONOqwaxLCidwqPkzfekcnVf0nnb -->
-
 This document covers:
-
 - Supported hardware operators and instruction forms
 - Data layout and memory interaction semantics
 - Constraints imposed by the underlying CIM architecture
 - Guidance for extending the operator set
 
 # Development Guide
+
 > This section documents the minimal build steps required for this project.
 > For a complete and up-to-date guide, please refer to:
 >
@@ -85,9 +77,13 @@ conda activate torch-mlir
     ```shell
     python -m pip install -r requirements.txt -r torchvision-requirements.txt
     ```
+
 ## Building
+
 ### With CMake
+
 #### Configure for Building
+
 1. **If you haven't already**, [activate the Python environment](#set-up-the-python-environment)
 1. Choose command relevant to LLVM setup:
 1. Choose command relevant to LLVM setup:
@@ -166,5 +162,3 @@ conda activate torch-mlir
       ```shell
       lli /path/to/add.ll
       ```
-
-
