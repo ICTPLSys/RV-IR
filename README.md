@@ -84,7 +84,6 @@ pip install --pre torch-mlir torchvision \
 ### With CMake
 
 #### Configure for Building
-
 1. **If you haven't already**, [activate the Python environment](#set-up-the-python-environment)
 2. Choose command relevant to LLVM setup:
     1. **If you want the more straightforward option**, run the "in-tree" setup:
@@ -92,6 +91,8 @@ pip install --pre torch-mlir torchvision \
         cmake -GNinja -Bbuild \
           `# Enables "--debug" and "--debug-only" flags for the "torch-mlir-opt" tool` \
           -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+          -DPython3_EXECUTABLE=$(which python3) \
+          -DPython_EXECUTABLE=$(which python3) \
           -DLLVM_ENABLE_ASSERTIONS=ON \
           -DPython3_FIND_VIRTUALENV=ONLY \
           -DPython_FIND_VIRTUALENV=ONLY \
