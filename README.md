@@ -73,10 +73,11 @@ conda create -n torch-mlir python=3.11
 conda activate torch-mlir
 ```
 2. Install the latest requirements.
-
-    ```shell
-    python -m pip install -r requirements.txt -r torchvision-requirements.txt
-    ```
+```shell
+pip install --pre torch-mlir torchvision \
+  --extra-index-url https://download.pytorch.org/whl/nightly/cpu \
+  -f https://github.com/llvm/torch-mlir-release/releases/expanded_assets/dev-wheels
+```
 
 ## Building
 
@@ -85,10 +86,8 @@ conda activate torch-mlir
 #### Configure for Building
 
 1. **If you haven't already**, [activate the Python environment](#set-up-the-python-environment)
-1. Choose command relevant to LLVM setup:
-1. Choose command relevant to LLVM setup:
+2. Choose command relevant to LLVM setup:
     1. **If you want the more straightforward option**, run the "in-tree" setup:
-
         ```shell
         cmake -GNinja -Bbuild \
           `# Enables "--debug" and "--debug-only" flags for the "torch-mlir-opt" tool` \
@@ -104,10 +103,8 @@ conda activate torch-mlir
           -DLLVM_EXTERNAL_PROJECTS="torch-mlir" \
           -DLLVM_EXTERNAL_TORCH_MLIR_SOURCE_DIR="$PWD"
         ```
-
         - NOTE: uses external/llvm-project/llvm as the main build, so LLVM will be built in addition to torch-mlir and its sub-projects.
     2. **If you want to use a separate build of LLVM from another directory**, run the "out-of-tree" setup:
-
         ```shell
         cmake -GNinja -Bbuild \
           `# Enables "--debug" and "--debug-only" flags for the "torch-mlir-opt" tool` \
@@ -121,44 +118,35 @@ conda activate torch-mlir
           -DMLIR_DIR="$LLVM_INSTALL_DIR/lib/cmake/mlir/" \
           -DLLVM_DIR="$LLVM_INSTALL_DIR/lib/cmake/llvm/"
         ```
-
         - Be sure to have built LLVM with `-DLLVM_ENABLE_PROJECTS=mlir`.
         - Be aware that the installed version of LLVM needs in general to match the committed version in `externals/llvm-project`. Using a different version may or may not work.
-
     - [About MLIR debugging](https://mlir.llvm.org/getting_started/Debugging/)
-#### Configure for Building
-1. [Configure the build](#configure-for-building) if you haven't already done so.
-1. **If you want to...**
-    - **...build _everything_** (including LLVM if configured as "in-tree"), run:
 
+#### Configure for Building
+
+1. [Configure the build](#configure-for-building) if you haven't already done so.
+2. **If you want to...**
+    - **...build _everything_** (including LLVM if configured as "in-tree"), run:
       ```shell
       cmake --build build
       ```
-
     - **...build _just_ torch-mlir** (not all of LLVM), run:
-
       ```shell
       cmake --build build --target tools/torch-mlir/all
       ```
-
     - **...run unit tests**, run:
-
       ```shell
       cmake --build build --target check-torch-mlir
       ```
-
     - **...run single test**, run:
-
       ```shell
       ./bin/llvm-lit -v ../test/Conversion/RISCVToLLVM/add.mlir
       ```
     - **...run the MLIR-to-LLVM lowering pipeline test**, run:
-
       ```shell
       ./bin/torch-mlir-opt --convert-linalg-to-riscv --convert-riscv-to-affine --convert-riscv-to-llvm\ ../test/Conversion/RISCVToLLVM/add.mlir >> add.ll
       ```
     - **...Execute the code with LLVM interpreter**, run:
-
       ```shell
       lli /path/to/add.ll
       ```
