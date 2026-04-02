@@ -24,6 +24,7 @@
 >RISC-V backends and CIM-related IR extensions.
 >Internally, RV-IR reuses the torch-mlir https://github.com/llvm/torch-mlir build system, tools, and
 >Python bindings.
+
 ## RISC-V Dialect Design
 
 RV-IR introduces a custom **RISCV Dialect** to model RISC-V and CIM-oriented execution semantics at the MLIR level.
@@ -62,11 +63,16 @@ This document covers:
 >
 > - https://github.com/llvm/torch-mlir/blob/main/README.md
 > - https://github.com/llvm/torch-mlir/blob/main/docs/development.md
+
 ## Setting Up Environment
+
 ### Clone the Repository
+
 ```shell
-   git clone https://github.com/ICTPLSys/RV-IR && cd RV-IR
-   ```
+git clone https://github.com/ICTPLSys/RV-IR && cd RV-IR
+git submodule update --init --progress
+```
+
 ### Set up the Python environment
 
 1. if you want to switch over multiple versions of Python using conda, you can create a conda environment with Python 3.11.
