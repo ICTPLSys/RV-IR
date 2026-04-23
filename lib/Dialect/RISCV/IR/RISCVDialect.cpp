@@ -31,7 +31,7 @@
 // #include "RISCV/RISCVConstant.h"
 
 using namespace mlir;
-using namespace riscv;   
+using namespace rocc;   
 
 //===----------------------------------------------------------------------===//
 // RISCV dialect.
@@ -42,7 +42,7 @@ using namespace riscv;
 // #include "RISCV/RISCVDialect.cpp.inc"
 
 
-void RISCVDialect::initialize() {
+void ROCCDialect::initialize() {
 //     addTypes<
 // #define GET_TYPEDEF_LIST
 // #include "RISCV/RISCVOpsTypes.cpp.inc"
@@ -56,7 +56,7 @@ void RISCVDialect::initialize() {
 
 }
 
-Type RISCVDialect::parseType(DialectAsmParser &parser) const {
+Type ROCCDialect::parseType(DialectAsmParser &parser) const {
   // Parse the main keyword for the type.
   StringRef keyword;
   if (parser.parseKeyword(&keyword))
@@ -71,15 +71,15 @@ Type RISCVDialect::parseType(DialectAsmParser &parser) const {
   if (keyword == "async.token")
     return AsyncTokenType::get(context);
 
-  parser.emitError(parser.getNameLoc(), "unknown riscv type: " + keyword);
+  parser.emitError(parser.getNameLoc(), "unknown rocc type: " + keyword);
   return Type();
 }
 
-void RISCVDialect::printType(Type type, DialectAsmPrinter &os) const {
+void ROCCDialect::printType(Type type, DialectAsmPrinter &os) const {
   TypeSwitch<Type>(type)
       .Case<EventType>([&](Type) { os << "event"; })
       .Case<AsyncTokenType>([&](Type) { os << "async.token"; })
-      .Default([](Type) { llvm_unreachable("unexpected 'riscv' type"); });
+      .Default([](Type) { llvm_unreachable("unexpected 'rocc' type"); });
 }
 
 //===----------------------------------------------------------------------===//
@@ -123,7 +123,7 @@ void RISCVDialect::printType(Type type, DialectAsmPrinter &os) const {
 //                               mlir::OperationState &state, double value) {
 //   auto dataType = RankedTensorType::get({}, builder.getF64Type());
 //   auto dataAttribute = DenseElementsAttr::get(dataType, value);
-//   riscv::ConstantOp::build(builder, state, dataType, dataAttribute);
+//   rocc::ConstantOp::build(builder, state, dataType, dataAttribute);
 // }
 // 构建一个 f64 类型的常量
 void ConstantOp::build(OpBuilder &builder, OperationState &state, double value) {
@@ -144,7 +144,7 @@ void ConstantOp::build(OpBuilder &builder, OperationState &state, int64_t value)
 //   auto dataType = mlir::RankedTensorType::get({}, builder.getI64Type());
 //   auto attr = builder.getI64IntegerAttr(value);
 //   auto dataAttribute = mlir::DenseElementsAttr::get(dataType, value);
-//   riscv::ConstantOp::build(builder, state, dataType, dataAttribute);
+//   rocc::ConstantOp::build(builder, state, dataType, dataAttribute);
 // }
 //===----------------------------------------------------------------------===//
 // TransposeOp
@@ -390,7 +390,7 @@ void Conv2DOp::build(OpBuilder &builder, OperationState &state,
 //===----------------------------------------------------------------------===//
 // LaunchOp
 //===----------------------------------------------------------------------===//
-void riscv::LaunchOp::print(OpAsmPrinter &p) {
+void rocc::LaunchOp::print(OpAsmPrinter &p) {
 
   p << ' ';
 
@@ -454,7 +454,7 @@ void riscv::LaunchOp::print(OpAsmPrinter &p) {
                 /*printBlockTerminators=*/false);
 }
 
-ParseResult riscv::LaunchOp::parse(OpAsmParser &parser, OperationState &result) {
+ParseResult rocc::LaunchOp::parse(OpAsmParser &parser, OperationState &result) {
 
   SmallVector<OpAsmParser::UnresolvedOperand, 4> asyncDependencies;
   SmallVector<OpAsmParser::Argument, 4> tileArgs;
@@ -552,45 +552,45 @@ ParseResult riscv::LaunchOp::parse(OpAsmParser &parser, OperationState &result) 
                       parser.getBuilder().getDenseI32ArrayAttr(segmentSizes));
   return success();
 }
-ArrayRef<BlockArgument> riscv::LaunchOp::getIds() {
+ArrayRef<BlockArgument> rocc::LaunchOp::getIds() {
   auto s = getBody().front().getArguments();
   auto n = getNumDims();
   return s.take_front(n);
 }
 
-ArrayRef<BlockArgument> riscv::LaunchOp::getSize() {
+ArrayRef<BlockArgument> rocc::LaunchOp::getSize() {
   auto s = getBody().front().getArguments();
   auto n = getNumDims();
   return s.slice(n, n);
 }
 
-OperandRange riscv::LaunchOp::getSizeOperands() {
+OperandRange rocc::LaunchOp::getSizeOperands() {
   auto start = getAsyncDependencies().size();
   auto n = getNumDims();
   return getOperands().slice(start, n);
 }
 
-unsigned riscv::LaunchOp::getNumKernelOperands() {
+unsigned rocc::LaunchOp::getNumKernelOperands() {
   return getNumOperands() - getAsyncDependencies().size() - getNumDims();
 }
 
-OperandRange riscv::LaunchOp::getKernelOperands() {
+OperandRange rocc::LaunchOp::getKernelOperands() {
   return getOperands().drop_front(getAsyncDependencies().size() + getNumDims());
 }
 
-Value riscv::LaunchOp::getKernelOperand(unsigned i) {
+Value rocc::LaunchOp::getKernelOperand(unsigned i) {
   return getOperand(getAsyncDependencies().size() + getNumDims() + i);
 }
 
-ArrayRef<BlockArgument> riscv::LaunchOp::getKernelArguments() {
+ArrayRef<BlockArgument> rocc::LaunchOp::getKernelArguments() {
   return getBody().front().getArguments().drop_front(getNumDims() * 2);
 }
 
-BlockArgument riscv::LaunchOp::getKernelArgument(unsigned i) {
+BlockArgument rocc::LaunchOp::getKernelArgument(unsigned i) {
   return getKernelArguments()[i];
 }
 
-unsigned riscv::LaunchOp::getNumDims() {
+unsigned rocc::LaunchOp::getNumDims() {
   auto size_attr_name = getOperandSegmentSizeAttr();
   auto size_attr = (*this)->getAttrOfType<DenseI32ArrayAttr>(size_attr_name);
   auto segment_sizes = size_attr.asArrayRef();
@@ -599,57 +599,57 @@ unsigned riscv::LaunchOp::getNumDims() {
 //===----------------------------------------------------------------------===//
 // HerdOp
 //===----------------------------------------------------------------------===//
-ArrayRef<BlockArgument> riscv::HerdOp::getIds() {
+ArrayRef<BlockArgument> rocc::HerdOp::getIds() {
   auto s = getBody().front().getArguments();
   auto n = getNumDims();
   return s.take_front(n);
 }
 
-ArrayRef<BlockArgument> riscv::HerdOp::getSize() {
+ArrayRef<BlockArgument> rocc::HerdOp::getSize() {
   auto s = getBody().front().getArguments();
   auto n = getNumDims();
   return s.slice(n, n);
 }
 
-OperandRange riscv::HerdOp::getSizeOperands() {
+OperandRange rocc::HerdOp::getSizeOperands() {
   auto start = getAsyncDependencies().size();
   auto n = getNumDims();
   return getOperands().slice(start, n);
 }
 
-unsigned riscv::HerdOp::getNumKernelOperands() {
+unsigned rocc::HerdOp::getNumKernelOperands() {
   return getNumOperands() - getAsyncDependencies().size() - getNumDims();
 }
 
-OperandRange riscv::HerdOp::getKernelOperands() {
+OperandRange rocc::HerdOp::getKernelOperands() {
   return getOperands().drop_front(getAsyncDependencies().size() + getNumDims());
 }
 
-Value riscv::HerdOp::getKernelOperand(unsigned i) {
+Value rocc::HerdOp::getKernelOperand(unsigned i) {
   return getOperand(getAsyncDependencies().size() + getNumDims() + i);
 }
 
-ArrayRef<BlockArgument> riscv::HerdOp::getKernelArguments() {
+ArrayRef<BlockArgument> rocc::HerdOp::getKernelArguments() {
   return getBody().front().getArguments().drop_front(4);
 }
 
-BlockArgument riscv::HerdOp::getKernelArgument(unsigned i) {
+BlockArgument rocc::HerdOp::getKernelArgument(unsigned i) {
   return getKernelArguments()[i];
 }
 
-unsigned riscv::HerdOp::getNumDims() {
+unsigned rocc::HerdOp::getNumDims() {
   auto size_attr_name = getOperandSegmentSizeAttr();
   auto size_attr = (*this)->getAttrOfType<DenseI32ArrayAttr>(size_attr_name);
   auto segment_sizes = size_attr.asArrayRef();
   return segment_sizes[1];
 }
 
-uint64_t riscv::HerdOp::getNumCols() {
+uint64_t rocc::HerdOp::getNumCols() {
   auto cols = getSizeOperands()[0].getDefiningOp();
   return cast<arith::ConstantIndexOp>(cols).value();
 }
 
-uint64_t riscv::HerdOp::getNumRows() {
+uint64_t rocc::HerdOp::getNumRows() {
   auto rows = getSizeOperands()[1].getDefiningOp();
   return cast<arith::ConstantIndexOp>(rows).value();
 }
@@ -657,7 +657,7 @@ uint64_t riscv::HerdOp::getNumRows() {
 // FuncOp
 //===----------------------------------------------------------------------===//
 
-void riscv::FuncOp::build(mlir::OpBuilder &builder, mlir::OperationState &state,
+void rocc::FuncOp::build(mlir::OpBuilder &builder, mlir::OperationState &state,
                    llvm::StringRef name, mlir::FunctionType type,
                    llvm::ArrayRef<mlir::NamedAttribute> attrs) {
   // FunctionOpInterface provides a convenient `build` method that will populate
@@ -692,10 +692,10 @@ void FuncOp::print(mlir::OpAsmPrinter &p) {
 // ReturnOp
 //===----------------------------------------------------------------------===//
 
-mlir::Operation *RISCVDialect::materializeConstant(mlir::OpBuilder &builder,
+mlir::Operation *ROCCDialect::materializeConstant(mlir::OpBuilder &builder,
                                                    mlir::Attribute value,
                                                    mlir::Type type,
                                                    mlir::Location loc) {
-  return builder.create<riscv::ConstantOp>(
+  return builder.create<rocc::ConstantOp>(
       loc, type, mlir::cast<mlir::DenseElementsAttr>(value));
 }

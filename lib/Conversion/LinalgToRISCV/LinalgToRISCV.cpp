@@ -46,9 +46,9 @@ using namespace mlir;
 
 //===----------------------------------------------------------------------===//
 // Linalg to RISCV Lowering Patterns
-// @brief: Pattern to lower linalg.matmul to riscv.matmul
+// @brief: Pattern to lower linalg.matmul to rocc.matmul
 //===----------------------------------------------------------------------===//
-struct LinalgMatmulToRISCVMatmul : public OpConversionPattern<linalg::MatmulOp> {
+struct LinalgMatmulToROCCMatmul : public OpConversionPattern<linalg::MatmulOp> {
   using OpConversionPattern<linalg::MatmulOp>::OpConversionPattern;
 
   LogicalResult
@@ -66,20 +66,20 @@ struct LinalgMatmulToRISCVMatmul : public OpConversionPattern<linalg::MatmulOp> 
       return rewriter.notifyMatchFailure(op, "output is not a tensor");
     }
     
-    // Create riscv.matmul operation
-    // auto matmulOp = rewriter.create<riscv::MatmulOp>(op.getLoc(), outputType, lhs, rhs);
-    auto matmulOp = rewriter.create<riscv::MatmulOp>(op.getLoc(), lhs, rhs, output);
+    // Create rocc.matmul operation
+    // auto matmulOp = rewriter.create<rocc::MatmulOp>(op.getLoc(), outputType, lhs, rhs);
+    auto matmulOp = rewriter.create<rocc::MatmulOp>(op.getLoc(), lhs, rhs, output);
     
-    // Replace the linalg.matmul with riscv.matmul
+    // Replace the linalg.matmul with rocc.matmul
     rewriter.replaceOp(op, matmulOp->getResults());
     return success();
   }
 };
 //===----------------------------------------------------------------------===//
 // Linalg to RISCV Lowering Patterns
-// @brief: Pattern to lower linalg.batch_matmul to riscv.batch_matmul
+// @brief: Pattern to lower linalg.batch_matmul to rocc.batch_matmul
 //===----------------------------------------------------------------------===//
-struct LinalgBatchMatmulToRISCVMatmul : public OpConversionPattern<linalg::BatchMatmulOp> {
+struct LinalgBatchMatmulToROCCMatmul : public OpConversionPattern<linalg::BatchMatmulOp> {
   using OpConversionPattern::OpConversionPattern;
 
   LogicalResult
@@ -92,8 +92,8 @@ struct LinalgBatchMatmulToRISCVMatmul : public OpConversionPattern<linalg::Batch
     auto lhsType = dyn_cast<MemRefType>(lhs.getType());
     auto rhsType = dyn_cast<MemRefType>(rhs.getType());
     auto outputType = dyn_cast<MemRefType>(output.getType());
-    // Create riscv.batch_matmul operation
-    auto batchMatmulOp = rewriter.create<riscv::BatchMatMulOp>(
+    // Create rocc.batch_matmul operation
+    auto batchMatmulOp = rewriter.create<rocc::BatchMatMulOp>(
         op.getLoc(),  
         lhs, rhs, 
         output               
@@ -105,9 +105,9 @@ struct LinalgBatchMatmulToRISCVMatmul : public OpConversionPattern<linalg::Batch
 };
 //===----------------------------------------------------------------------===//
 // Linalg to RISCV Lowering Patterns
-// @brief: Pattern to lower linalg.matvec to riscv.matvec
+// @brief: Pattern to lower linalg.matvec to rocc.matvec
 //===----------------------------------------------------------------------===//
-struct LinalgMatvecToRISCVMatvec : public OpConversionPattern<linalg::MatvecOp> {
+struct LinalgMatvecToROCCMatvec : public OpConversionPattern<linalg::MatvecOp> {
   using OpConversionPattern<linalg::MatvecOp>::OpConversionPattern;
 
   LogicalResult
@@ -124,17 +124,17 @@ struct LinalgMatvecToRISCVMatvec : public OpConversionPattern<linalg::MatvecOp> 
       return rewriter.notifyMatchFailure(op, "output is not a tensor");
     }
     
-    // Create riscv.matvec operation
-    auto matvecOp = rewriter.create<riscv::MatvecOp>(op.getLoc(), outputType, lhs, rhs);
+    // Create rocc.matvec operation
+    auto matvecOp = rewriter.create<rocc::MatvecOp>(op.getLoc(), outputType, lhs, rhs);
     
-    // Replace the linalg.matvec with riscv.matvec
+    // Replace the linalg.matvec with rocc.matvec
     rewriter.replaceOp(op, matvecOp.getResult());
     return success();
   }
 };
-// Pattern to lower linalg.reduce to riscv.reduce
+// Pattern to lower linalg.reduce to rocc.reduce
 
-struct LinalgReduceToRISCVReduce : public OpConversionPattern<linalg::ReduceOp> {
+struct LinalgReduceToROCCReduce : public OpConversionPattern<linalg::ReduceOp> {
   using OpConversionPattern<linalg::ReduceOp>::OpConversionPattern;
 
   LogicalResult
@@ -170,7 +170,7 @@ struct LinalgReduceToRISCVReduce : public OpConversionPattern<linalg::ReduceOp> 
       }
     }
 
-    auto reduceOp = rewriter.create<riscv::ReduceOp>(
+    auto reduceOp = rewriter.create<rocc::ReduceOp>(
         op.getLoc(),          
         targetOutputType,     
         input,                
@@ -182,9 +182,9 @@ struct LinalgReduceToRISCVReduce : public OpConversionPattern<linalg::ReduceOp> 
     return success();
   }
 };
-// Pattern to lower linalg.conv2d to riscv.conv2d
+// Pattern to lower linalg.conv2d to rocc.conv2d
 
-struct LinalgConv2DToRISCVConv2D : public OpConversionPattern<linalg::Conv2DOp> {
+struct LinalgConv2DToROCCConv2D : public OpConversionPattern<linalg::Conv2DOp> {
   using OpConversionPattern<linalg::Conv2DOp>::OpConversionPattern;
 
   LogicalResult
@@ -201,18 +201,18 @@ struct LinalgConv2DToRISCVConv2D : public OpConversionPattern<linalg::Conv2DOp> 
       return rewriter.notifyMatchFailure(op, "output is not a tensor");
     }
     
-    // Create riscv.conv2d operation
-    auto conv2dOp = rewriter.create<riscv::Conv2DOp>(op.getLoc(), outputType, input, kernel);
+    // Create rocc.conv2d operation
+    auto conv2dOp = rewriter.create<rocc::Conv2DOp>(op.getLoc(), outputType, input, kernel);
     
-    // Replace the linalg.conv2d with riscv.conv2d
+    // Replace the linalg.conv2d with rocc.conv2d
     rewriter.replaceOp(op, conv2dOp.getResult());
     return success();
   }
 };
 
 
-// Pattern to lower linalg.transpose to riscv.transpose
-// struct LinalgTransposeToRISCVTranspose : public OpConversionPattern<linalg::TransposeOp> {
+// Pattern to lower linalg.transpose to rocc.transpose
+// struct LinalgTransposeToROCCTranspose : public OpConversionPattern<linalg::TransposeOp> {
 //   using OpConversionPattern::OpConversionPattern;
 
 //   LogicalResult matchAndRewrite(
@@ -229,9 +229,9 @@ struct LinalgConv2DToRISCVConv2D : public OpConversionPattern<linalg::Conv2DOp> 
 //       return rewriter.notifyMatchFailure(linalgTranspose, "permutation must be [1, 0]");
 //     }
 
-//     // 创建 riscv.transpose Op，替换原 linalg.transpose
+//     // 创建 rocc.transpose Op，替换原 linalg.transpose
 //     // 注意：缓冲化后的 linalg.transpose 无返回值，直接原地修改 init
-//     auto transposeOp = rewriter.create<riscv::TransposeOp>(
+//     auto transposeOp = rewriter.create<rocc::TransposeOp>(
 //         linalgTranspose.getLoc(),    // 复用原 Op 的位置信息
 //         // initMemRefType,              // 返回值类型（和 init 一致）
 //         input,                       // 输入 memref
@@ -244,8 +244,8 @@ struct LinalgConv2DToRISCVConv2D : public OpConversionPattern<linalg::Conv2DOp> 
 //   }
 // };
 
-// Pattern to lower linalg.transpose to riscv.transpose
-struct LinalgTransposeToRISCVTranspose : public OpConversionPattern<linalg::TransposeOp> {
+// Pattern to lower linalg.transpose to rocc.transpose
+struct LinalgTransposeToROCCTranspose : public OpConversionPattern<linalg::TransposeOp> {
   using OpConversionPattern::OpConversionPattern;
 
   LogicalResult matchAndRewrite(
@@ -266,7 +266,7 @@ struct LinalgTransposeToRISCVTranspose : public OpConversionPattern<linalg::Tran
       return rewriter.notifyMatchFailure(linalgTranspose, "permutation rank mismatch with input");
     }
 
-    rewriter.create<riscv::TransposeOp>(
+    rewriter.create<rocc::TransposeOp>(
         linalgTranspose.getLoc(),
         input,
         init,
@@ -278,7 +278,7 @@ struct LinalgTransposeToRISCVTranspose : public OpConversionPattern<linalg::Tran
   }
 };
 
-// struct LinalgTransposeToRISCVTranspose : public OpConversionPattern<linalg::TransposeOp> {
+// struct LinalgTransposeToROCCTranspose : public OpConversionPattern<linalg::TransposeOp> {
 //   using OpConversionPattern<linalg::TransposeOp>::OpConversionPattern;
 
 //   LogicalResult
@@ -299,14 +299,14 @@ struct LinalgTransposeToRISCVTranspose : public OpConversionPattern<linalg::Tran
 
 //     SmallVector<int64_t> transpValues = {1, 0};
 //     auto transpAttr = rewriter.getI64ArrayAttr(transpValues);
-//     auto transposeOp = rewriter.create<riscv::TransposeOp>(
+//     auto transposeOp = rewriter.create<rocc::TransposeOp>(
 //         op.getLoc(),          // 位置信息
 //         outputType,           // 输出张量类型
 //         input,                // 输入张量
 //         transpAttr            // transp属性
 //     );
     
-//     // Replace the linalg.transpose with riscv.transpose
+//     // Replace the linalg.transpose with rocc.transpose
 //     rewriter.replaceOp(op, transposeOp.getResult());
 //     return success();
 //   }
@@ -315,8 +315,8 @@ struct LinalgTransposeToRISCVTranspose : public OpConversionPattern<linalg::Tran
 
 
 // Pattern to lower linalg.elemwise_binary to riscv binary ops
-template <typename LinalgOp, typename RISCVOp>
-struct LinalgBinaryToRISCVBinary : public OpConversionPattern<LinalgOp> {
+template <typename LinalgOp, typename ROCCOp>
+struct LinalgBinaryToROCCBinary : public OpConversionPattern<LinalgOp> {
   using OpConversionPattern<LinalgOp>::OpConversionPattern;
 
   LogicalResult
@@ -334,16 +334,16 @@ struct LinalgBinaryToRISCVBinary : public OpConversionPattern<LinalgOp> {
     }
     
     // Create the corresponding RISCV operation
-    auto riscvOp = rewriter.create<RISCVOp>(op.getLoc(), outputType, lhs, rhs);
+    auto roccOp = rewriter.create<ROCCOp>(op.getLoc(), outputType, lhs, rhs);
     
     // Replace the linalg operation with RISCV operation
-    rewriter.replaceOp(op, riscvOp.getResult());
+    rewriter.replaceOp(op, roccOp.getResult());
     return success();
   }
 };
 // Pattern to lower linalg elemwise (single operand) to  unary ops
-template <typename LinalgOp, typename RISCVOp>  
-struct LinalgUnaryToRISCVUnary : public OpConversionPattern<LinalgOp> {
+template <typename LinalgOp, typename ROCCOp>  
+struct LinalgUnaryToROCCUnary : public OpConversionPattern<LinalgOp> {
   using OpConversionPattern<LinalgOp>::OpConversionPattern;
 
   LogicalResult
@@ -357,18 +357,18 @@ struct LinalgUnaryToRISCVUnary : public OpConversionPattern<LinalgOp> {
       return rewriter.notifyMatchFailure(
           op, "linalg unary op output is not a RankedTensorType (expected tensor)");
     }
-    auto riscvNotOp = rewriter.create<RISCVOp>(
+    auto roccNotOp = rewriter.create<ROCCOp>(
         op.getLoc(),        
         outputTensorType,   
         input               
     );
-    rewriter.replaceOp(op, riscvNotOp.getResult());
+    rewriter.replaceOp(op, roccNotOp.getResult());
 
     return success();
   }
 };
-// Pattern to lower linalg.add to riscv.addf/addi
-struct LinalgAddToRISCVAdd : public OpConversionPattern<linalg::AddOp> {
+// Pattern to lower linalg.add to rocc.addf/addi
+struct LinalgAddToROCCAdd : public OpConversionPattern<linalg::AddOp> {
   using OpConversionPattern<linalg::AddOp>::OpConversionPattern;
 
   LogicalResult
@@ -388,24 +388,24 @@ struct LinalgAddToRISCVAdd : public OpConversionPattern<linalg::AddOp> {
     // Check element type
     // auto elementType = outputType.getElementType();
     // if (isa<FloatType>(elementType)) {
-    //   auto addFOp = rewriter.create<riscv::AddFOp>(op.getLoc(), outputType, lhs, rhs);
+    //   auto addFOp = rewriter.create<rocc::AddFOp>(op.getLoc(), outputType, lhs, rhs);
     //   rewriter.replaceOp(op, addFOp.getResult());
     // } else if (isa<IntegerType>(elementType)) {
-    //   auto addIOp = rewriter.create<riscv::AddIOp>(op.getLoc(), outputType, lhs, rhs);
+    //   auto addIOp = rewriter.create<rocc::AddIOp>(op.getLoc(), outputType, lhs, rhs);
     //   rewriter.replaceOp(op, addIOp.getResult());
     // } else {
     //   return rewriter.notifyMatchFailure(op, "unsupported element type");
     // }
     
-      auto addOp = rewriter.create<riscv::AddOp>(op.getLoc(), outputType, lhs, rhs);
+      auto addOp = rewriter.create<rocc::AddOp>(op.getLoc(), outputType, lhs, rhs);
       rewriter.replaceOp(op, addOp.getResult());
     
     return success();
   }
 };
 
-// Pattern to lower linalg.sub to riscv.subf/subi
-struct LinalgSubToRISCVSub : public OpConversionPattern<linalg::SubOp> {
+// Pattern to lower linalg.sub to rocc.subf/subi
+struct LinalgSubToROCCSub : public OpConversionPattern<linalg::SubOp> {
   using OpConversionPattern<linalg::SubOp>::OpConversionPattern;
 
   LogicalResult
@@ -425,23 +425,23 @@ struct LinalgSubToRISCVSub : public OpConversionPattern<linalg::SubOp> {
     // Check element type
     // auto elementType = outputType.getElementType();
     // if (isa<FloatType>(elementType)) {
-    //   auto subFOp = rewriter.create<riscv::SubFOp>(op.getLoc(), outputType, lhs, rhs);
+    //   auto subFOp = rewriter.create<rocc::SubFOp>(op.getLoc(), outputType, lhs, rhs);
     //   rewriter.replaceOp(op, subFOp.getResult());
     // } else if (isa<IntegerType>(elementType)) {
-    //   auto subIOp = rewriter.create<riscv::SubIOp>(op.getLoc(), outputType, lhs, rhs);
+    //   auto subIOp = rewriter.create<rocc::SubIOp>(op.getLoc(), outputType, lhs, rhs);
     //   rewriter.replaceOp(op, subIOp.getResult());
     // } else {
     //   return rewriter.notifyMatchFailure(op, "unsupported element type");
     // }
-    auto subOp = rewriter.create<riscv::SubOp>(op.getLoc(), outputType, lhs, rhs);
+    auto subOp = rewriter.create<rocc::SubOp>(op.getLoc(), outputType, lhs, rhs);
     rewriter.replaceOp(op, subOp.getResult());
     
     return success();
   }
 };
 
-// Pattern to lower linalg.mul to riscv.mulf/muli
-struct LinalgMulToRISCVMul : public OpConversionPattern<linalg::MulOp> {
+// Pattern to lower linalg.mul to rocc.mulf/muli
+struct LinalgMulToROCCMul : public OpConversionPattern<linalg::MulOp> {
   using OpConversionPattern<linalg::MulOp>::OpConversionPattern;
 
   LogicalResult
@@ -461,23 +461,23 @@ struct LinalgMulToRISCVMul : public OpConversionPattern<linalg::MulOp> {
     // Check element type
     // auto elementType = outputType.getElementType();
     // if (isa<FloatType>(elementType)) {
-    //   auto mulFOp = rewriter.create<riscv::MulFOp>(op.getLoc(), outputType, lhs, rhs);
+    //   auto mulFOp = rewriter.create<rocc::MulFOp>(op.getLoc(), outputType, lhs, rhs);
     //   rewriter.replaceOp(op, mulFOp.getResult());
     // } else if (isa<IntegerType>(elementType)) {
-    //   auto mulIOp = rewriter.create<riscv::MulIOp>(op.getLoc(), outputType, lhs, rhs);
+    //   auto mulIOp = rewriter.create<rocc::MulIOp>(op.getLoc(), outputType, lhs, rhs);
     //   rewriter.replaceOp(op, mulIOp.getResult());
     // } else {
     //   return rewriter.notifyMatchFailure(op, "unsupported element type");
     // }
-    auto mulOp = rewriter.create<riscv::MulOp>(op.getLoc(), outputType, lhs, rhs);
+    auto mulOp = rewriter.create<rocc::MulOp>(op.getLoc(), outputType, lhs, rhs);
       rewriter.replaceOp(op, mulOp.getResult());
     
     return success();
   }
 };
 
-// Pattern to lower linalg.div to riscv.divf/divsi/divui
-struct LinalgDivToRISCVDiv : public OpConversionPattern<linalg::DivOp> {
+// Pattern to lower linalg.div to rocc.divf/divsi/divui
+struct LinalgDivToROCCDiv : public OpConversionPattern<linalg::DivOp> {
   using OpConversionPattern<linalg::DivOp>::OpConversionPattern;
 
   LogicalResult
@@ -497,27 +497,27 @@ struct LinalgDivToRISCVDiv : public OpConversionPattern<linalg::DivOp> {
     // Check element type
     // auto elementType = outputType.getElementType();
     // if (isa<FloatType>(elementType)) {
-    //   auto divFOp = rewriter.create<riscv::DivFOp>(op.getLoc(), outputType, lhs, rhs);
+    //   auto divFOp = rewriter.create<rocc::DivFOp>(op.getLoc(), outputType, lhs, rhs);
     //   rewriter.replaceOp(op, divFOp.getResult());
     // } else if (auto intType = dyn_cast<IntegerType>(elementType)) {
     //   if (intType.isSigned()) {
-    //     auto divSIOp = rewriter.create<riscv::DivSIOp>(op.getLoc(), outputType, lhs, rhs);
+    //     auto divSIOp = rewriter.create<rocc::DivSIOp>(op.getLoc(), outputType, lhs, rhs);
     //     rewriter.replaceOp(op, divSIOp.getResult());
     //   } else {
-    //     auto divUIOp = rewriter.create<riscv::DivUIOp>(op.getLoc(), outputType, lhs, rhs);
+    //     auto divUIOp = rewriter.create<rocc::DivUIOp>(op.getLoc(), outputType, lhs, rhs);
     //     rewriter.replaceOp(op, divUIOp.getResult());
     //   }
     // } else {
     //   return rewriter.notifyMatchFailure(op, "unsupported element type");
     // }
-    auto divOp = rewriter.create<riscv::DivOp>(op.getLoc(), outputType, lhs, rhs);
+    auto divOp = rewriter.create<rocc::DivOp>(op.getLoc(), outputType, lhs, rhs);
       rewriter.replaceOp(op, divOp.getResult());
     
     return success();
   }
 };
-// Pattern to lower linalg.negf to riscv.negf
-struct LinalgNegFToRISCVNegF : public OpConversionPattern<linalg::NegFOp> {
+// Pattern to lower linalg.negf to rocc.negf
+struct LinalgNegFToROCCNegF : public OpConversionPattern<linalg::NegFOp> {
   using OpConversionPattern<linalg::NegFOp>::OpConversionPattern;
 
   LogicalResult
@@ -533,14 +533,14 @@ struct LinalgNegFToRISCVNegF : public OpConversionPattern<linalg::NegFOp> {
       return rewriter.notifyMatchFailure(op, "output is not a tensor");
     }
     
-    auto negfOp = rewriter.create<riscv::NegFOp>(op.getLoc(), outputType, input);
+    auto negfOp = rewriter.create<rocc::NegFOp>(op.getLoc(), outputType, input);
       rewriter.replaceOp(op, negfOp.getResult());
     
     return success();
   }
 };
-// Pattern to lower linalg.max to riscv.max
-struct LinalgMaxToRISCVMax : public OpConversionPattern<linalg::MaxOp> {
+// Pattern to lower linalg.max to rocc.max
+struct LinalgMaxToROCCMax : public OpConversionPattern<linalg::MaxOp> {
   using OpConversionPattern<linalg::MaxOp>::OpConversionPattern;
 
   LogicalResult
@@ -557,15 +557,15 @@ struct LinalgMaxToRISCVMax : public OpConversionPattern<linalg::MaxOp> {
       return rewriter.notifyMatchFailure(op, "output is not a tensor");
     }
     
-    auto maxOp = rewriter.create<riscv::MaxOp>(op.getLoc(), outputType, lhs, rhs);
+    auto maxOp = rewriter.create<rocc::MaxOp>(op.getLoc(), outputType, lhs, rhs);
       rewriter.replaceOp(op, maxOp.getResult());
     
     return success();
   }
 };
 
-// Pattern to lower linalg.min to riscv.min
-struct LinalgMinToRISCVMin : public OpConversionPattern<linalg::MinOp> {
+// Pattern to lower linalg.min to rocc.min
+struct LinalgMinToROCCMin : public OpConversionPattern<linalg::MinOp> {
   using OpConversionPattern<linalg::MinOp>::OpConversionPattern;
 
   LogicalResult
@@ -582,15 +582,15 @@ struct LinalgMinToRISCVMin : public OpConversionPattern<linalg::MinOp> {
       return rewriter.notifyMatchFailure(op, "output is not a tensor");
     }
     
-    auto maxOp = rewriter.create<riscv::MinOp>(op.getLoc(), outputType, lhs, rhs);
+    auto maxOp = rewriter.create<rocc::MinOp>(op.getLoc(), outputType, lhs, rhs);
     rewriter.replaceOp(op, maxOp.getResult());
     
     return success();
   }
 };
 
-// Pattern to lower linalg.pooling_nchw_max to riscv.pooling_nchw_max
-struct LinalgPoolingNchwMaxToRISCV
+// Pattern to lower linalg.pooling_nchw_max to rocc.pooling_nchw_max
+struct LinalgPoolingNchwMaxToROCC
     : public OpConversionPattern<linalg::PoolingNchwMaxOp> {
   using OpConversionPattern<
       linalg::PoolingNchwMaxOp>::OpConversionPattern;
@@ -609,7 +609,7 @@ struct LinalgPoolingNchwMaxToRISCV
     auto strides =
         op->getAttrOfType<TypedAttr>("strides");
 
-    auto newOp = rewriter.create<riscv::PoolingNchwMaxOp>(
+    auto newOp = rewriter.create<rocc::PoolingNchwMaxOp>(
         op.getLoc(),
         TypeRange{},
         ValueRange{input, kernel, output},
@@ -626,20 +626,20 @@ struct LinalgPoolingNchwMaxToRISCV
 //===----------------------------------------------------------------------===//
 
 namespace {
-class LinalgToRISCVLowerPass
-    : public mlir::PassWrapper<LinalgToRISCVLowerPass,
+class LinalgToROCCLowerPass
+    : public mlir::PassWrapper<LinalgToROCCLowerPass,
                                mlir::OperationPass<mlir::ModuleOp>> {
 public:
   StringRef getArgument() const final { 
-    return "convert-linalg-to-riscv"; 
+    return "convert-linalg-to-rocc"; 
   }
   StringRef getDescription() const final {
-    return "Lower Linalg dialect operations to RISCV dialect";
+    return "Lower Linalg dialect operations to ROCC dialect";
   }
-  MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(LinalgToRISCVLowerPass)
+  MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(LinalgToROCCLowerPass)
 
   void getDependentDialects(mlir::DialectRegistry &registry) const override {
-    registry.insert<riscv::RISCVDialect, mlir::linalg::LinalgDialect,
+    registry.insert<rocc::ROCCDialect, mlir::linalg::LinalgDialect,
                     mlir::memref::MemRefDialect,scf::SCFDialect,
                     bufferization::BufferizationDialect,func::FuncDialect,
                      mlir::arith::ArithDialect>();
@@ -649,11 +649,11 @@ public:
 };
 } // namespace
 
-void LinalgToRISCVLowerPass::runOnOperation() {
+void LinalgToROCCLowerPass::runOnOperation() {
   mlir::ConversionTarget target(getContext());
 
-  // Mark RISCV dialect as legal
-  target.addLegalDialect<riscv::RISCVDialect>();
+  // Mark ROCC dialect as legal
+  target.addLegalDialect<rocc::ROCCDialect>();
   
   // Keep other dialects legal for operations we don't convert
   target.addLegalDialect<mlir::BuiltinDialect,
@@ -661,7 +661,7 @@ void LinalgToRISCVLowerPass::runOnOperation() {
                          mlir::arith::ArithDialect,
                          mlir::tensor::TensorDialect>();
 
-  // Mark specific Linalg ops as illegal if they can be converted to RISCV
+  // Mark specific Linalg ops as illegal if they can be converted to ROCC
   target.addIllegalOp<linalg::MatmulOp>();
   target.addIllegalOp<linalg::MatvecOp>();
   target.addIllegalOp<linalg::ReduceOp>();
@@ -694,20 +694,20 @@ void LinalgToRISCVLowerPass::runOnOperation() {
   mlir::RewritePatternSet patterns(&getContext());
   // mlir::linalg::populateLinalgToStandardConversionPatterns(patterns);
   
-  patterns.add<LinalgMatmulToRISCVMatmul,
-               LinalgMatvecToRISCVMatvec,
-               LinalgReduceToRISCVReduce,
-               LinalgConv2DToRISCVConv2D,
-               LinalgTransposeToRISCVTranspose,
-               LinalgAddToRISCVAdd,
-               LinalgSubToRISCVSub,
-               LinalgMulToRISCVMul,
-               LinalgDivToRISCVDiv,
-               LinalgNegFToRISCVNegF,
-               LinalgMaxToRISCVMax,
-               LinalgMinToRISCVMin,
-               LinalgBatchMatmulToRISCVMatmul,
-               LinalgPoolingNchwMaxToRISCV>(&getContext());
+  patterns.add<LinalgMatmulToROCCMatmul,
+               LinalgMatvecToROCCMatvec,
+               LinalgReduceToROCCReduce,
+               LinalgConv2DToROCCConv2D,
+               LinalgTransposeToROCCTranspose,
+               LinalgAddToROCCAdd,
+               LinalgSubToROCCSub,
+               LinalgMulToROCCMul,
+               LinalgDivToROCCDiv,
+               LinalgNegFToROCCNegF,
+               LinalgMaxToROCCMax,
+               LinalgMinToROCCMin,
+               LinalgBatchMatmulToROCCMatmul,
+               LinalgPoolingNchwMaxToROCC>(&getContext());
 
   if (mlir::failed(mlir::applyPartialConversion(getOperation(), target,
                                                 std::move(patterns)))) {
@@ -715,9 +715,9 @@ void LinalgToRISCVLowerPass::runOnOperation() {
   }
 }
 
-namespace riscv{
-  std::unique_ptr<mlir::Pass> createLowerLinalgToRISCVPass() {
-    return std::make_unique<LinalgToRISCVLowerPass>();
+namespace rocc{
+  std::unique_ptr<mlir::Pass> createLowerLinalgToROCCPass() {
+    return std::make_unique<LinalgToROCCLowerPass>();
   }
 }
 

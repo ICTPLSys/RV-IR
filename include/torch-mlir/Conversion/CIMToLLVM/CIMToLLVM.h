@@ -6,4 +6,4 @@
 namespace cim {
 
 std::unique_ptr<mlir::OperationPass<mlir::func::FuncOp>> createCIMLowerToLLVMPass();
-} // namespace riscv
+} // namespace cim

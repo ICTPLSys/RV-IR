@@ -6,23 +6,23 @@ include "mlir/IR/EnumAttr.td"
 include "mlir/IR/AttrTypeBase.td"
 
 //===----------------------------------------------------------------------===//
-// RISCV dialect definition.
+// ROCC dialect definition.
 //===----------------------------------------------------------------------===//
 
-def RISCV_Dialect : Dialect {
+def ROCC_Dialect : Dialect {
     // 定义名字空间 namespace，对应 C++ 的 getDialectNamespace 方法返回值
-    let name = "riscv";
+    let name = "rocc";
 
     // 一行关于这个 Dialect 的介绍
-    let summary = "RISC-V dialect.";
+    let summary = "ROCC accelerator dialect.";
 
     // 更详细的关于这个 Dialect 的介绍
     let description = [{
-        RISC-V Universal ISA + RISC-V Scalable Accelerate ISA.
+        ROCC (Rocket Custom Coprocessor) style operations for accelerator lowering.
     }];
 
     // 产生一个返回名字空间名称的接口
-    let cppNamespace = "::riscv";
+    let cppNamespace = "::rocc";
 
     // 该设置用于激活 materializeConstant 方法，这使得可以例如 Canonicalize 优化
     let hasConstantMaterializer = 1;
@@ -34,45 +34,45 @@ def RISCV_Dialect : Dialect {
 // Base hello operation definition.
 //===----------------------------------------------------------------------===//
 // 定义一个 Op 作为后续其他具体 Op 的基类
-class RISCV_Op<string mnemonic, list<Trait> traits = []> :
-        Op<RISCV_Dialect, mnemonic, traits>;
+class ROCC_Op<string mnemonic, list<Trait> traits = []> :
+        Op<ROCC_Dialect, mnemonic, traits>;
 
 // Template for types.
-class RISCV_Type<string name, list<Trait> traits = []>
-        : TypeDef<RISCV_Dialect, name, traits>;
+class ROCC_Type<string name, list<Trait> traits = []>
+        : TypeDef<ROCC_Dialect, name, traits>;
 //===----------------------------------------------------------------------===//
 // Type definitions
 //===----------------------------------------------------------------------===//
 // Define a type constraint that accepts all supported tensor types
 // Using MLIR built-in tensor type definitions
-def RISCVTensor : AnyTypeOf<[
+def ROCCTensor : AnyTypeOf<[
     I1Tensor, I8Tensor, I16Tensor, I32Tensor, I64Tensor,
     BF16Tensor, F16Tensor, F32Tensor, F64Tensor, AnySignlessIntegerOrIndex, AnyFloat
 ]>;
 
 //Define sclar types
-def RISCVScalar : AnyTypeOf<[AnySignlessIntegerOrIndex,AnyFloat]>;
+def ROCCScalar : AnyTypeOf<[AnySignlessIntegerOrIndex,AnyFloat]>;
 
 // Define integer tensor types
-def RISCVIntTensor : AnyTypeOf<[I8Tensor, I16Tensor, I32Tensor, I64Tensor]>;
+def ROCCIntTensor : AnyTypeOf<[I8Tensor, I16Tensor, I32Tensor, I64Tensor]>;
 
 // Define floating point tensor types  
-def RISCVFloatTensor : AnyTypeOf<[BF16Tensor, F16Tensor, F32Tensor, F64Tensor]>;
+def ROCCFloatTensor : AnyTypeOf<[BF16Tensor, F16Tensor, F32Tensor, F64Tensor]>;
 
 //===----------------------------------------------------------------------===//
 // Interface definitions
 //===----------------------------------------------------------------------===//
 
-def RISCV_AsyncToken : DialectType<
-  RISCV_Dialect, CPred<"llvm::isa<::riscv::AsyncTokenType>($_self)">, "async token type">,
-             BuildableType<"::riscv::AsyncTokenType::get($_builder.getContext())">;
+def ROCC_AsyncToken : DialectType<
+  ROCC_Dialect, CPred<"llvm::isa<::rocc::AsyncTokenType>($_self)">, "async token type">,
+             BuildableType<"::rocc::AsyncTokenType::get($_builder.getContext())">;
 
-def RISCV_AsyncOpInterface : OpInterface<"AsyncOpInterface"> {
+def ROCC_AsyncOpInterface : OpInterface<"AsyncOpInterface"> {
   let description = [{
-    Interface for RISCV operations that execute asynchronously.
+    Interface for ROCC operations that execute asynchronously.
 
-    RISCV operations implementing this interface take a list of dependencies
-    as `riscv.async.token` arguments and optionally return a `riscv.async.token`.
+    ROCC operations implementing this interface take a list of dependencies
+    as `rocc.async.token` arguments and optionally return a `rocc.async.token`.
 
     The op doesn't start executing until all ops producing the async
     dependency tokens have finished executing.
@@ -82,7 +82,7 @@ def RISCV_AsyncOpInterface : OpInterface<"AsyncOpInterface"> {
     complete. If the op does not return a token, the op will wait for
     execution to complete.
   }];
-  let cppNamespace = "::riscv";
+  let cppNamespace = "::rocc";
   let methods = [
     InterfaceMethod<[{
         Query the operands that represent async dependency tokens.
@@ -99,15 +99,15 @@ def RISCV_AsyncOpInterface : OpInterface<"AsyncOpInterface"> {
     >
   ];
 }
-def RISCV_HierarchyInterface : OpInterface<"HierarchyInterface"> {
+def ROCC_HierarchyInterface : OpInterface<"HierarchyInterface"> {
   let description = [{
-    Interface for riscv hierarchy ops `riscv.herd`, `riscv.segment` and `riscv.launch`
+    Interface for ROCC hierarchy ops `rocc.herd`, `rocc.segment` and `rocc.launch`
 
     Operations implementing this interface define an iteration space, support
     arguments for implementing "isolated from above" and have an integerc `id`
     attribute.
   }];
-  let cppNamespace = "::riscv";
+  let cppNamespace = "::rocc";
   let methods = [
     InterfaceMethod<"Get the block arguments representing the iteration space indices (e.g., %x, %y for a 2D herd)",
     "::mlir::ArrayRef<::mlir::BlockArgument>", "getIds"
@@ -154,9 +154,9 @@ def RISCV_HierarchyInterface : OpInterface<"HierarchyInterface"> {
   ];
 }
 
-def RISCV_MemcpyInterface : OpInterface<"MemcpyInterface"> {
+def ROCC_MemcpyInterface : OpInterface<"MemcpyInterface"> {
   let description = [{}];
-  let cppNamespace = "::riscv";
+  let cppNamespace = "::rocc";
   let methods = [
     InterfaceMethod<"description",
     "::mlir::Value", "getSrcMemref"
@@ -190,9 +190,9 @@ def RISCV_MemcpyInterface : OpInterface<"MemcpyInterface"> {
 //===----------------------------------------------------------------------===//
 // Type definitions
 //===----------------------------------------------------------------------===//
-def RISCV_Event : DialectType<
-  RISCV_Dialect, CPred<"llvm::isa<::riscv::EventType>($_self)">, "event type">,
-             BuildableType<"::riscv::EventType::get($_builder.getContext())">;
+def ROCC_Event : DialectType<
+  ROCC_Dialect, CPred<"llvm::isa<::rocc::EventType>($_self)">, "event type">,
+             BuildableType<"::rocc::EventType::get($_builder.getContext())">;
 
 def GMEM:  I32EnumAttrCase<"GMEM", 6>;
 def SPAD0:  I32EnumAttrCase<"SPAD0", 5>;
@@ -205,7 +205,7 @@ def LMEM:  I32EnumAttrCase<"LMEM", 0>;
 def MemorySpace: I32EnumAttr<"MemorySpace", "AIR Memory Space IDs",
   [GMEM,SPAD0,SPAD1,SPAD2,SPAD3,CIMC0,LMEM]> {
 
-  let cppNamespace = "::riscv";
+  let cppNamespace = "::rocc";
 }
 
 

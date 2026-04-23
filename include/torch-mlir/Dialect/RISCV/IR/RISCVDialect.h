@@ -33,26 +33,26 @@
 
 using namespace mlir;
 
-namespace riscv {
+namespace rocc {
 class AsyncTokenType
     : public Type::TypeBase<AsyncTokenType, Type, TypeStorage> {
 public:
   // Used for generic hooks in TypeBase.
   using Base::Base;
-  static constexpr StringLiteral name = "riscv.async_token";
+  static constexpr StringLiteral name = "rocc.async_token";
 };
 
 class EventType : public Type::TypeBase<EventType, Type, TypeStorage> {
 public:
   using Base::Base;
-  static constexpr StringLiteral name = "riscv.event";
+  static constexpr StringLiteral name = "rocc.event";
 };
 
 }
 //===----------------------------------------------------------------------===//
 // AsyncOpInterface
 //===----------------------------------------------------------------------===//
-namespace riscv{
+namespace rocc{
 static ParseResult parseAsyncDependencies(
     OpAsmParser &parser, Type &asyncTokenType,
     SmallVectorImpl<OpAsmParser::UnresolvedOperand> &asyncDependencies) {
@@ -60,7 +60,7 @@ static ParseResult parseAsyncDependencies(
   if (succeeded(parser.parseOptionalKeyword("async"))) {
     if (parser.getNumResults() == 0)
       return parser.emitError(loc, "needs to be named when marked 'async'");
-    asyncTokenType = parser.getBuilder().getType<riscv::AsyncTokenType>();
+    asyncTokenType = parser.getBuilder().getType<rocc::AsyncTokenType>();
   }
   return parser.parseOperandList(asyncDependencies,
                                  OpAsmParser::Delimiter::OptionalSquare);
@@ -120,17 +120,17 @@ static void printAsyncDependencies(OpAsmPrinter &printer, Operation *op,
 |*                                                                            *|
 \*===----------------------------------------------------------------------===*/
 
-// namespace riscv {
+// namespace rocc {
 
-// class RISCVDialect : public ::mlir::Dialect {
-//   explicit RISCVDialect(::mlir::MLIRContext *context);
+// class ROCCDialect : public ::mlir::Dialect {
+//   explicit ROCCDialect(::mlir::MLIRContext *context);
 
 //   void initialize();
 //   friend class ::mlir::MLIRContext;
 // public:
-//   ~RISCVDialect() override;
+//   ~ROCCDialect() override;
 //   static constexpr ::llvm::StringLiteral getDialectNamespace() {
-//     return ::llvm::StringLiteral("riscv");
+//     return ::llvm::StringLiteral("rocc");
 //   }
 
 //   /// Materialize a single constant operation from a given attribute value with
@@ -140,5 +140,5 @@ static void printAsyncDependencies(OpAsmPrinter &printer, Operation *op,
 //                                          ::mlir::Type type,
 //                                          ::mlir::Location loc) override;
 // };
-// } // namespace riscv
-// MLIR_DECLARE_EXPLICIT_TYPE_ID(::riscv::RISCVDialect)
+// } // namespace rocc
+// MLIR_DECLARE_EXPLICIT_TYPE_ID(::rocc::ROCCDialect)

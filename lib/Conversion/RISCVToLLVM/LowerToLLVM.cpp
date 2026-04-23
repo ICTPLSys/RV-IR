@@ -42,11 +42,11 @@
 
 #include <iostream>
 using namespace mlir;
-namespace riscv{
+namespace rocc{
 class PrintOpLowering : public mlir::ConversionPattern {
 public:
   explicit PrintOpLowering(mlir::MLIRContext *context)
-      : mlir::ConversionPattern(riscv::PrintOp::getOperationName(), 1,
+      : mlir::ConversionPattern(rocc::PrintOp::getOperationName(), 1,
                                 context) {}
 
   mlir::LogicalResult
@@ -132,7 +132,7 @@ public:
     }
 
     // Generate a call to printf for the current element of the loop.
-    auto printOp = mlir::cast<riscv::PrintOp>(op);
+    auto printOp = mlir::cast<rocc::PrintOp>(op);
     auto elementLoad =
         rewriter.create<mlir::memref::LoadOp>(loc, printOp.getInput(), loopIvs);
     
@@ -231,7 +231,7 @@ private:
 class WorldOpLowering : public mlir::ConversionPattern {
 public:
   explicit WorldOpLowering(mlir::MLIRContext *context)
-      : mlir::ConversionPattern(riscv::WorldOp::getOperationName(), 1,
+      : mlir::ConversionPattern(rocc::WorldOp::getOperationName(), 1,
                                 context) {}
 
   mlir::LogicalResult
@@ -241,12 +241,12 @@ public:
     mlir::ModuleOp parentModule = op->getParentOfType<mlir::ModuleOp>();
     auto printfRef = getOrInsertPrintf(rewriter, parentModule);
     auto loc = op->getLoc();
-    mlir::Value riscvWorld = getOrCreateGlobalString(
-        loc, rewriter, "riscv_word_string",
-        mlir::StringRef("RISCV, World! \n\0", 16), parentModule);
+    mlir::Value roccWorld = getOrCreateGlobalString(
+        loc, rewriter, "rocc_word_string",
+        mlir::StringRef("ROCC, World! \n\0", 15), parentModule);
 
     rewriter.create<mlir::LLVM::CallOp>(loc, getPrintfType(context),
-                                        printfRef, riscvWorld);
+                                        printfRef, roccWorld);
     rewriter.eraseOp(op);
     return mlir::success();
   }
@@ -305,20 +305,20 @@ private:
 
   }
 };
-} // namespace riscv
+} // namespace rocc
 
 namespace {
-class RISCVToLLVMLoweringPass
-    : public mlir::PassWrapper<RISCVToLLVMLoweringPass,
+class ROCCToLLVMLoweringPass
+    : public mlir::PassWrapper<ROCCToLLVMLoweringPass,
                                mlir::OperationPass<mlir::ModuleOp>> {
 public:
   StringRef getArgument() const final { 
-    return "convert-riscv-to-llvm"; 
+    return "convert-rocc-to-llvm"; 
   }
   StringRef getDescription() const final {
-    return "Lower RISCV dialect operations to LLVM dialect";
+    return "Lower ROCC dialect operations to LLVM dialect";
   }
-  MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(RISCVToLLVMLoweringPass)
+  MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(ROCCToLLVMLoweringPass)
   void getDependentDialects(mlir::DialectRegistry &registry) const override {
     registry.insert<mlir::LLVM::LLVMDialect, mlir::scf::SCFDialect,
                     mlir::cf::ControlFlowDialect>();
@@ -328,7 +328,7 @@ public:
 };
 } // namespace
 
-void RISCVToLLVMLoweringPass::runOnOperation() {
+void ROCCToLLVMLoweringPass::runOnOperation() {
   mlir::LLVMConversionTarget target(getContext());
   target.addLegalOp<mlir::ModuleOp>();
 
@@ -344,7 +344,7 @@ void RISCVToLLVMLoweringPass::runOnOperation() {
                                                         patterns);
   populateFuncToLLVMConversionPatterns(typeConverter, patterns);
 
-  patterns.add<riscv::PrintOpLowering, riscv::WorldOpLowering>(&getContext());
+  patterns.add<rocc::PrintOpLowering, rocc::WorldOpLowering>(&getContext());
 
   auto module = getOperation();
   if (failed(applyFullConversion(module, target, std::move(patterns)))) {
@@ -352,11 +352,11 @@ void RISCVToLLVMLoweringPass::runOnOperation() {
   }
 }
 
-// std::unique_ptr<mlir::Pass> riscv::createLowerToLLVMPass() {
-//   return std::make_unique<RISCVToLLVMLoweringPass>();
+// std::unique_ptr<mlir::Pass> rocc::createLowerToLLVMPass() {
+//   return std::make_unique<ROCCToLLVMLoweringPass>();
 // }
-namespace riscv {
+namespace rocc {
   std::unique_ptr<mlir::Pass> createLowerToLLVMPass() {
-    return std::make_unique<RISCVToLLVMLoweringPass>(); 
+    return std::make_unique<ROCCToLLVMLoweringPass>(); 
   }
 }

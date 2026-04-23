@@ -1,6 +1,6 @@
-// RUN: torch-mlir-opt <%s --convert-linalg-to-riscv | FileCheck %s
+// RUN: torch-mlir-opt <%s --convert-linalg-to-rocc | FileCheck %s
 
-// CHECK: riscv.pooling_nchw_max
+// CHECK: rocc.pooling_nchw_max
 module attributes {torch.debug_module_name = "PoolingNCHWMax"} {
   memref.global "private" constant @__constant_3x3xf32
     : memref<3x3xf32> = dense<0.0> {alignment = 64 : i64}

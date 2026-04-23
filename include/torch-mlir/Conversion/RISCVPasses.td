@@ -8,9 +8,9 @@ include "mlir/Pass/PassBase.td"
 //===----------------------------------------------------------------------===//
 
 
-def ConvertRISCVToCIMPass : Pass<"convert-riscv-to-cim", operation="func::FuncOp"> {
-    let summary = "Convert linalg to riscv dialect";
-    let constructor = "cim::createRISCVLowerToCIMPass()";
+def ConvertROCCToCIMPass : Pass<"convert-rocc-to-cim", operation="func::FuncOp"> {
+    let summary = "Convert ROCC dialect to CIM dialect";
+    let constructor = "cim::createROCCLowerToCIMPass()";
     let dependentDialects = [ "cim::CIMDialect", "tensor::TensorDialect","linalg::LinalgDialect"];
 }
 
@@ -20,17 +20,17 @@ def ConvertCIMToLLVMPass : Pass<"convert-cim-to-llvm", operation="func::FuncOp">
     let dependentDialects = [ "cim::CIMDialect", "tensor::TensorDialect","llvm::LLVMDialect", "memref::MemRefDialect"];
 }
 
-def ConvertLinalgToRISCVPass : Pass<"convert-linalg-to-riscv", operation="func::FuncOp"> {
-    let summary = "Convert linalg to riscv dialect";
-    let constructor = "riscv::createLowerLinalgToRISCVPass()";
-    let dependentDialects = [ "riscv::RISCVDialect", "tensor::TensorDialect"];
+def ConvertLinalgToROCCPass : Pass<"convert-linalg-to-rocc", operation="func::FuncOp"> {
+    let summary = "Convert Linalg to ROCC dialect";
+    let constructor = "rocc::createLowerLinalgToROCCPass()";
+    let dependentDialects = [ "rocc::ROCCDialect", "tensor::TensorDialect"];
 }
 
-def ConvertRiscvToAffinePass : Pass<"convert-riscv-to-affine", operation="func::FuncOp"> {
-    let summary = "Convert RISC-V dialect to Affine dialect";
-    let constructor = "riscv::createLowerToAffinePass()";
+def ConvertROCCToAffinePass : Pass<"convert-rocc-to-affine", operation="func::FuncOp"> {
+    let summary = "Convert ROCC dialect to Affine dialect";
+    let constructor = "rocc::createLowerToAffinePass()";
     let dependentDialects = [
-        "riscv::RISCVDialect",
+        "rocc::ROCCDialect",
         "affine::AffineDialect",  
         "bufferization::BufferizationDialect", 
         "memref::MemRefDialect", 
@@ -39,11 +39,11 @@ def ConvertRiscvToAffinePass : Pass<"convert-riscv-to-affine", operation="func::
 }
 
 
-def ConvertRiscvToLLVMPass : Pass<"convert-riscv-to-llvm", operation="func::FuncOp"> {
-    let summary = "Convert RISC-V dialect to LLVM dialect";
-    let constructor = "riscv::createLowerToLLVMPass()";
+def ConvertROCCToLLVMPass : Pass<"convert-rocc-to-llvm", operation="func::FuncOp"> {
+    let summary = "Convert ROCC dialect to LLVM dialect";
+    let constructor = "rocc::createLowerToLLVMPass()";
     let dependentDialects = [
-        "riscv::RISCVDialect",
+        "rocc::ROCCDialect",
         "llvm::LLVMDialect",  
         "func::FuncDialect",
         "memref::MemRefDialect"

@@ -18,14 +18,14 @@ include "RISCVDialect.td"
 //===----------------------------------------------------------------------===//
 // ConstantOp
 //===----------------------------------------------------------------------===//
-def ConstantOp : RISCV_Op<"constant", [Pure]> {
+def ConstantOp : ROCC_Op<"constant", [Pure]> {
   let summary = "constant";
   let description = [{
     Constant operation turns a literal into an SSA value. The data is attached
     to the operation as an attribute. For example:
     Example:
     ```mlir
-      %0 = "riscv.constant"()
+      %0 = "rocc.constant"()
       { value = dense<[[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]> : tensor<2x3xf64> }
       : () -> tensor<2x3xf64>
     ```
@@ -39,9 +39,9 @@ def ConstantOp : RISCV_Op<"constant", [Pure]> {
     OpBuilder<(ins "int64_t":$value)>
     // OpBuilder<(ins "int":$value)>
   ];
-  // let results = (outs RISCVTensor);
+  // let results = (outs ROCCTensor);
   // let arguments = (ins ElementsAttr:$value);
-  // let results = (outs RISCVTensor);
+  // let results = (outs ROCCTensor);
   let arguments = (ins TypedAttrInterface:$value);
   let results = (outs AnyType:$result);
 
@@ -49,7 +49,7 @@ def ConstantOp : RISCV_Op<"constant", [Pure]> {
 //===----------------------------------------------------------------------===//
 // PrintOp
 //===----------------------------------------------------------------------===//
-def PrintOp : RISCV_Op<"print", [Pure]> {
+def PrintOp : ROCC_Op<"print", [Pure]> {
     let summary = "print operation";
     let description = [{
       The "print" builtin operation prints a given input tensor, and produces
@@ -57,12 +57,12 @@ def PrintOp : RISCV_Op<"print", [Pure]> {
       
       Example:
       ```mlir
-        "riscv.print"(%0) : (tensor<2x3xf64>) -> ()
+        "rocc.print"(%0) : (tensor<2x3xf64>) -> ()
        ```
     }];
 
     // The print operation takes an input tensor to print.
-    let arguments = (ins AnyTypeOf<[RISCVTensor, AnyMemRef]>:$input);
+    let arguments = (ins AnyTypeOf<[ROCCTensor, AnyMemRef]>:$input);
 
     let assemblyFormat = "$input attr-dict `:` type($input)";
 }
@@ -71,7 +71,7 @@ def PrintOp : RISCV_Op<"print", [Pure]> {
 //===----------------------------------------------------------------------===//
 // MatMulOp
 //===----------------------------------------------------------------------===//
-def MatmulOp : RISCV_Op<"matmul", [Pure]> {
+def MatmulOp : ROCC_Op<"matmul", [Pure]> {
     let summary = [{
       Performs a matrix multiplication of two 2D inputs without broadcast or transpose.
     }];
@@ -82,7 +82,7 @@ def MatmulOp : RISCV_Op<"matmul", [Pure]> {
       
       Example MatMul:
       ```mlir
-      riscv.matmul ins(%lhs, %rhs : memref<2x3xf64>, memref<3x4xf64s>)
+      rocc.matmul ins(%lhs, %rhs : memref<2x3xf64>, memref<3x4xf64s>)
                    outs(%out : memref<2x4xf64>)
       ```
     }];
@@ -105,7 +105,7 @@ def MatmulOp : RISCV_Op<"matmul", [Pure]> {
 //===----------------------------------------------------------------------===//
 // BatchMatMulOp
 //===----------------------------------------------------------------------===//
-def BatchMatMulOp : RISCV_Op<"batch_matmul", [Pure]> {
+def BatchMatMulOp : ROCC_Op<"batch_matmul", [Pure]> {
   let summary = [{
     Performs an in-place batch matrix multiplication.
   }];
@@ -119,7 +119,7 @@ def BatchMatMulOp : RISCV_Op<"batch_matmul", [Pure]> {
 
     Example:
     ```mlir
-    riscv.batch_matmul ins(%lhs, %rhs : memref<1x128x2048xf32>, memref<1x2048x8192xf32>)
+    rocc.batch_matmul ins(%lhs, %rhs : memref<1x128x2048xf32>, memref<1x2048x8192xf32>)
                       outs(%out : memref<1x128x8192xf32>)
     ```
   }];
@@ -138,7 +138,7 @@ def BatchMatMulOp : RISCV_Op<"batch_matmul", [Pure]> {
 //===----------------------------------------------------------------------===//
 // MatvecOp
 //===----------------------------------------------------------------------===//
-def MatvecOp : RISCV_Op<"matvec", [Pure]> {
+def MatvecOp : ROCC_Op<"matvec", [Pure]> {
     let summary = [{
       Performs general matrix-vector multiplication (GEMV), computing the product 
       of a matrix and a vector with optional bias addition.
@@ -153,12 +153,12 @@ def MatvecOp : RISCV_Op<"matvec", [Pure]> {
       
       Example Gemv:
       ```mlir
-        %2 = "riscv.matvec"(%0, %1) : (tensor<4x5xf32>, tensor<5xf32>) -> tensor<4xf32>
+        %2 = "rocc.matvec"(%0, %1) : (tensor<4x5xf32>, tensor<5xf32>) -> tensor<4xf32>
       ```
     }];
 
-    let arguments = (ins RISCVTensor:$lhs, RISCVTensor:$rhs);
-    let results = (outs RISCVTensor);
+    let arguments = (ins ROCCTensor:$lhs, ROCCTensor:$rhs);
+    let results = (outs ROCCTensor);
 
     let builders = [
       OpBuilder<(ins "mlir::Value":$lhs, "mlir::Value":$rhs)>
@@ -167,7 +167,7 @@ def MatvecOp : RISCV_Op<"matvec", [Pure]> {
 //===----------------------------------------------------------------------===//
 // ReduceOp
 //===----------------------------------------------------------------------===//
-def ReduceOp : RISCV_Op<"reduce", [Pure]> {
+def ReduceOp : ROCC_Op<"reduce", [Pure]> {
 
   let summary = "tensor reduction operation";
   let description = [{
@@ -176,28 +176,28 @@ def ReduceOp : RISCV_Op<"reduce", [Pure]> {
     Example:
     ```mlir
       // Reduce add over dimension 0
-        %res1 = "riscv.reduce"(%0) {kind = "sum",dim=[0]} : 
+        %res1 = "rocc.reduce"(%0) {kind = "sum",dim=[0]} : 
         (tensor<3x2x4xf64>) -> tensor<1x2x4xf64>
       // Reduce add over dimension 1
-        %res2 = "riscv.reduce"(%0) {kind = "sum",dim=[1]} : 
+        %res2 = "rocc.reduce"(%0) {kind = "sum",dim=[1]} : 
         (tensor<3x2x4xf64>) -> tensor<3x1x4xf64>
       // Reduce add over dimension 2
-        %res3 = "riscv.reduce"(%0) {kind = "sum",dim=[2]} : 
+        %res3 = "rocc.reduce"(%0) {kind = "sum",dim=[2]} : 
         (tensor<3x2x4xf64>) -> tensor<3x2x1xf64>
       // Reduce add over dimension 0 and dimension 1
-        %res4 = "riscv.reduce"(%0) {kind = "sum",dim=[0,1]} :
+        %res4 = "rocc.reduce"(%0) {kind = "sum",dim=[0,1]} :
         (tensor<3x2x4xf64>) -> tensor<1x1x4xf64>
 
       // Reduce max over dimension 0 
-        %res_max = "riscv.reduce"(%0) {kind = "max", dim=[0]} : (tensor<3x2x4xf64>) -> tensor<1x2x4xf64>
+        %res_max = "rocc.reduce"(%0) {kind = "max", dim=[0]} : (tensor<3x2x4xf64>) -> tensor<1x2x4xf64>
 
       // Reduce min over dimension 0 
-        %res_min = "riscv.reduce"(%0) {kind = "min", dim=[1]} : (tensor<3x2x4xf64>) -> tensor<3x1x4xf64>
+        %res_min = "rocc.reduce"(%0) {kind = "min", dim=[1]} : (tensor<3x2x4xf64>) -> tensor<3x1x4xf64>
     ```
   }];
-  // let arguments = (ins RISCVTensor:$input, I64ArrayAttr:$axes, StrAttr:$kind);
-  let arguments = (ins RISCVTensor:$input, I64ArrayAttr:$dim,StrAttr:$kind);
-  let results = (outs RISCVTensor:$result);
+  // let arguments = (ins ROCCTensor:$input, I64ArrayAttr:$axes, StrAttr:$kind);
+  let arguments = (ins ROCCTensor:$input, I64ArrayAttr:$dim,StrAttr:$kind);
+  let results = (outs ROCCTensor:$result);
 
     let assemblyFormat = [{
     $input attr-dict `:` type($input) `->` type($result)
@@ -216,14 +216,14 @@ def ReduceOp : RISCV_Op<"reduce", [Pure]> {
 // TransposeOp
 //===----------------------------------------------------------------------===//
 
-def TransposeOp : RISCV_Op<"transpose", [Pure]> {
+def TransposeOp : ROCC_Op<"transpose", [Pure]> {
     // [Pure, DeclareOpInterfaceMethods<ShapeInferenceOpInterface>]> {
 
   let summary = "transpose operation";
   let description = [{
     Example:
     ```mlir
-      riscv.transpose ins(%0 : memref<64x32xf32>) outs(%alloc : memref<32x64xf32>) {permutation = array<i64: 1, 0>}
+      rocc.transpose ins(%0 : memref<64x32xf32>) outs(%alloc : memref<32x64xf32>) {permutation = array<i64: 1, 0>}
       ```
   }];
   let arguments = (ins
@@ -242,7 +242,7 @@ def TransposeOp : RISCV_Op<"transpose", [Pure]> {
 // ReshapeOp
 //===----------------------------------------------------------------------===//
 
-def ReshapeOp : RISCV_Op<"reshape", [
+def ReshapeOp : ROCC_Op<"reshape", [
     // DeclareOpInterfaceMethods<OpAsmOpInterface, ["getAsmResultNames"]>,
     Pure]> {
   let summary = "tensor reshape operation";
@@ -251,7 +251,7 @@ def ReshapeOp : RISCV_Op<"reshape", [
     the same number of elements but different shapes. For example:
 
     ```mlir
-    %dest = "riscv.reshape"(%src, %shape) : (tensor<2x3xf32>, tensor<2xi32>) -> tensor<3x2xf32>
+    %dest = "rocc.reshape"(%src, %shape) : (tensor<2x3xf32>, tensor<2xi32>) -> tensor<3x2xf32>
     ```
   }];
 
@@ -270,7 +270,7 @@ def ReshapeOp : RISCV_Op<"reshape", [
 // AddOp
 //===----------------------------------------------------------------------===//
 
-def AddOp : RISCV_Op<"add", [Pure,Commutative]> {
+def AddOp : ROCC_Op<"add", [Pure,Commutative]> {
   let summary = "General addition operation (supports integer/float)";
   let description = [{
     The `add` operation takes two operands and returns one result, with all types consistent.
@@ -280,13 +280,13 @@ def AddOp : RISCV_Op<"add", [Pure,Commutative]> {
     
     Examples:
     // Integer addition (scalar/Tensor)
-    %int_scalar = "riscv.add"(%a, %b) : (i32, i32) -> i32
-    %int_tensor = "riscv.add"(%t_a, %t_b) : (tensor<2x3xi32>, tensor<2x3xi32>) -> tensor<2x3xi32>
+    %int_scalar = "rocc.add"(%a, %b) : (i32, i32) -> i32
+    %int_tensor = "rocc.add"(%t_a, %t_b) : (tensor<2x3xi32>, tensor<2x3xi32>) -> tensor<2x3xi32>
 
   }];
 
-    let arguments = (ins RISCVTensor:$lhs, RISCVTensor:$rhs);
-    let results = (outs RISCVTensor);
+    let arguments = (ins ROCCTensor:$lhs, ROCCTensor:$rhs);
+    let results = (outs ROCCTensor);
     let builders = [
     OpBuilder<(ins "mlir::Value":$lhs, "mlir::Value":$rhs)>
   ];
@@ -298,7 +298,7 @@ def AddOp : RISCV_Op<"add", [Pure,Commutative]> {
 // SubOp
 //===----------------------------------------------------------------------===//
 
-def SubOp : RISCV_Op<"sub", [Pure]> {
+def SubOp : ROCC_Op<"sub", [Pure]> {
   let summary = "General subtraction operation (supports integer/float)";
   let description = [{
     The `sub` operation takes two operands and returns one result, with all types consistent.
@@ -308,17 +308,17 @@ def SubOp : RISCV_Op<"sub", [Pure]> {
     
     Examples:
     // Integer subtraction (scalar/Tensor)
-    %int_scalar = "riscv.sub"(%a, %b) : (i32, i32) -> i32
-    %int_tensor = "riscv.sub"(%t_a, %t_b) : (tensor<2x3xi32>, tensor<2x3xi32>) -> tensor<2x3xi32>
+    %int_scalar = "rocc.sub"(%a, %b) : (i32, i32) -> i32
+    %int_tensor = "rocc.sub"(%t_a, %t_b) : (tensor<2x3xi32>, tensor<2x3xi32>) -> tensor<2x3xi32>
 
     // Float subtraction (scalar/Tensor)
-    %float_scalar = "riscv.sub"(%c, %d) : (f32, f32) -> f32
-    %float_tensor = "riscv.sub"(%vec_c, %vec_d) : (tensor<2x3xf16>, tensor<2x3xf16>) -> tensor<2x3xf16>
+    %float_scalar = "rocc.sub"(%c, %d) : (f32, f32) -> f32
+    %float_tensor = "rocc.sub"(%vec_c, %vec_d) : (tensor<2x3xf16>, tensor<2x3xf16>) -> tensor<2x3xf16>
 
   }];
 
-    let arguments = (ins RISCVTensor:$lhs, RISCVTensor:$rhs);
-    let results = (outs RISCVTensor);
+    let arguments = (ins ROCCTensor:$lhs, ROCCTensor:$rhs);
+    let results = (outs ROCCTensor);
 
 }
 
@@ -326,7 +326,7 @@ def SubOp : RISCV_Op<"sub", [Pure]> {
 // MulOp
 //===----------------------------------------------------------------------===//
 
-def MulOp : RISCV_Op<"mul", [Pure]> {
+def MulOp : ROCC_Op<"mul", [Pure]> {
   let summary = "General multiplication operation (supports integer/float)";
   let description = [{
     The `mul` operation takes two operands and returns one result, with all types consistent.
@@ -336,23 +336,23 @@ def MulOp : RISCV_Op<"mul", [Pure]> {
     
     Examples:
     // Integer multiplication (scalar/Tensor)
-    %int_scalar = "riscv.mul"(%a, %b) : (i32, i32) -> i32
-    %int_tensor = "riscv.mul"(%t_a, %t_b) : (tensor<2x3xi32>, tensor<2x3xi32>) -> tensor<2x3xi32>
+    %int_scalar = "rocc.mul"(%a, %b) : (i32, i32) -> i32
+    %int_tensor = "rocc.mul"(%t_a, %t_b) : (tensor<2x3xi32>, tensor<2x3xi32>) -> tensor<2x3xi32>
 
     // Float multiplication (scalar/Tensor)
-    %float_scalar = "riscv.mul"(%c, %d) : (f32, f32) -> f32
-    %float_tensor = "riscv.mul"(%vec_c, %vec_d) : (tensor<2x3xf16>, tensor<2x3xf16>) -> tensor<2x3xf16>
+    %float_scalar = "rocc.mul"(%c, %d) : (f32, f32) -> f32
+    %float_tensor = "rocc.mul"(%vec_c, %vec_d) : (tensor<2x3xf16>, tensor<2x3xf16>) -> tensor<2x3xf16>
   }];
 
-    let arguments = (ins RISCVTensor:$lhs, RISCVTensor:$rhs);
-    let results = (outs RISCVTensor);
+    let arguments = (ins ROCCTensor:$lhs, ROCCTensor:$rhs);
+    let results = (outs ROCCTensor);
 }
 
 //===----------------------------------------------------------------------===//
 // DivOp
 //===----------------------------------------------------------------------===//
 
-def DivOp : RISCV_Op<"div", [Pure]> {
+def DivOp : ROCC_Op<"div", [Pure]> {
   let summary = "General division operation (supports signed/unsigned integer and float)";
   let description = [{
     The `div` operation takes two operands and returns one result, with all types consistent.
@@ -362,23 +362,23 @@ def DivOp : RISCV_Op<"div", [Pure]> {
     
     Examples:
     // Integer multiplication (scalar/Tensor)
-    %int_scalar = "riscv.div"(%a, %b) : (i32, i32) -> i32
-    %int_tensor = "riscv.div"(%t_a, %t_b) : (tensor<2x3xi32>, tensor<2x3xi32>) -> tensor<2x3xi32>
+    %int_scalar = "rocc.div"(%a, %b) : (i32, i32) -> i32
+    %int_tensor = "rocc.div"(%t_a, %t_b) : (tensor<2x3xi32>, tensor<2x3xi32>) -> tensor<2x3xi32>
 
     // Float multiplication (scalar/Tensor)
-    %float_scalar = "riscv.div"(%c, %d) : (f32, f32) -> f32
-    %float_tensor = "riscv.div"(%vec_c, %vec_d) : (tensor<2x3xf16>, tensor<2x3xf16>) -> tensor<2x3xf16>
+    %float_scalar = "rocc.div"(%c, %d) : (f32, f32) -> f32
+    %float_tensor = "rocc.div"(%vec_c, %vec_d) : (tensor<2x3xf16>, tensor<2x3xf16>) -> tensor<2x3xf16>
   }];
 
-    let arguments = (ins RISCVTensor:$lhs, RISCVTensor:$rhs);
-    let results = (outs RISCVTensor);
+    let arguments = (ins ROCCTensor:$lhs, ROCCTensor:$rhs);
+    let results = (outs ROCCTensor);
 }
 
 //===----------------------------------------------------------------------===//
 // MaxOp
 //===----------------------------------------------------------------------===//
 
-def MaxOp : RISCV_Op<"max", [Pure]> {
+def MaxOp : ROCC_Op<"max", [Pure]> {
   let summary = "General maximum operation (supports signed/unsigned integer and float)";
   let description = [{
     The `max` operation takes two operands and returns their maximum value, with all types consistent.
@@ -388,23 +388,23 @@ def MaxOp : RISCV_Op<"max", [Pure]> {
     
     Examples:
     // Integer multiplication (scalar/Tensor)
-    %int_scalar = "riscv.max"(%a, %b) : (i32, i32) -> i32
-    %int_tensor = "riscv.max"(%t_a, %t_b) : (tensor<2x3xi32>, tensor<2x3xi32>) -> tensor<2x3xi32>
+    %int_scalar = "rocc.max"(%a, %b) : (i32, i32) -> i32
+    %int_tensor = "rocc.max"(%t_a, %t_b) : (tensor<2x3xi32>, tensor<2x3xi32>) -> tensor<2x3xi32>
 
     // Float multiplication (scalar/Tensor)
-    %float_scalar = "riscv.max"(%c, %d) : (f32, f32) -> f32
-    %float_tensor = "riscv.max"(%vec_c, %vec_d) : (tensor<2x3xf16>, tensor<2x3xf16>) -> tensor<2x3xf16>
+    %float_scalar = "rocc.max"(%c, %d) : (f32, f32) -> f32
+    %float_tensor = "rocc.max"(%vec_c, %vec_d) : (tensor<2x3xf16>, tensor<2x3xf16>) -> tensor<2x3xf16>
   }];
 
-    let arguments = (ins RISCVTensor:$lhs, RISCVTensor:$rhs);
-    let results = (outs RISCVTensor);
+    let arguments = (ins ROCCTensor:$lhs, ROCCTensor:$rhs);
+    let results = (outs ROCCTensor);
 
 }
 //===----------------------------------------------------------------------===//
 // MinOp
 //===----------------------------------------------------------------------===//
 
-def MinOp : RISCV_Op<"min", [Pure]> {
+def MinOp : ROCC_Op<"min", [Pure]> {
   let summary = "General minimum operation (supports signed/unsigned integer and float)";
   let description = [{
     The `min` operation takes two operands and returns their minimum value, with all types consistent.
@@ -414,22 +414,22 @@ def MinOp : RISCV_Op<"min", [Pure]> {
     
     Examples:
     // Integer multiplication (scalar/Tensor)
-    %int_scalar = "riscv.min"(%a, %b) : (i32, i32) -> i32
-    %int_tensor = "riscv.min"(%t_a, %t_b) : (tensor<2x3xi32>, tensor<2x3xi32>) -> tensor<2x3xi32>
+    %int_scalar = "rocc.min"(%a, %b) : (i32, i32) -> i32
+    %int_tensor = "rocc.min"(%t_a, %t_b) : (tensor<2x3xi32>, tensor<2x3xi32>) -> tensor<2x3xi32>
 
     // Float multiplication (scalar/Tensor)
-    %float_scalar = "riscv.min"(%c, %d) : (f32, f32) -> f32
-    %float_tensor = "riscv.min"(%vec_c, %vec_d) : (tensor<2x3xf16>, tensor<2x3xf16>) -> tensor<2x3xf16>
+    %float_scalar = "rocc.min"(%c, %d) : (f32, f32) -> f32
+    %float_tensor = "rocc.min"(%vec_c, %vec_d) : (tensor<2x3xf16>, tensor<2x3xf16>) -> tensor<2x3xf16>
   }];
 
-    let arguments = (ins RISCVTensor:$lhs, RISCVTensor:$rhs);
-    let results = (outs RISCVTensor);
+    let arguments = (ins ROCCTensor:$lhs, ROCCTensor:$rhs);
+    let results = (outs ROCCTensor);
 }
 //===----------------------------------------------------------------------===//
 // AndIOp
 //===----------------------------------------------------------------------===//
 
-def AndIOp : RISCV_Op<"andi",
+def AndIOp : ROCC_Op<"andi",
     [Pure]> {
   let summary = "integer binary and";
   let description = [{
@@ -442,10 +442,10 @@ def AndIOp : RISCV_Op<"andi",
 
     ```mlir
     // Scalar integer bitwise and.
-    %a = riscv.andi %b, %c : i64
+    %a = rocc.andi %b, %c : i64
 
     // Tensor element-wise bitwise integer and.
-    %x = riscv.andi %y, %z : tensor<4x?xi8>
+    %x = rocc.andi %y, %z : tensor<4x?xi8>
     ```
   }];
 
@@ -456,7 +456,7 @@ def AndIOp : RISCV_Op<"andi",
 // XOrIOp
 //===----------------------------------------------------------------------===//
 
-def XOrIOp : RISCV_Op<"xori",
+def XOrIOp : ROCC_Op<"xori",
     [Pure]> {
   let summary = "integer binary xor";
   let description = [{
@@ -469,10 +469,10 @@ def XOrIOp : RISCV_Op<"xori",
 
     ```mlir
     // Scalar integer bitwise xor.
-    %a = riscv.xori %b, %c : i64
+    %a = rocc.xori %b, %c : i64
 
     // SIMD tensor element-wise bitwise integer xor.
-    %f = riscv.xori %g, %h : tensor<4xi32>
+    %f = rocc.xori %g, %h : tensor<4xi32>
     ```
   }];
 
@@ -483,7 +483,7 @@ def XOrIOp : RISCV_Op<"xori",
 // OrIOp   
 //===----------------------------------------------------------------------===//
 
-def OrIOp : RISCV_Op<"ori",
+def OrIOp : ROCC_Op<"ori",
     [Pure]> {
   let summary = "integer binary xor";
   let description = [{
@@ -496,10 +496,10 @@ def OrIOp : RISCV_Op<"ori",
 
     ```mlir
     // Scalar integer bitwise xor.
-    %a = riscv.ori %b, %c : i64
+    %a = rocc.ori %b, %c : i64
 
     // SIMD tensor element-wise bitwise integer xor.
-    %f = riscv.ori %g, %h : tensor<4xi32>
+    %f = rocc.ori %g, %h : tensor<4xi32>
     ```
   }];
 
@@ -510,7 +510,7 @@ def OrIOp : RISCV_Op<"ori",
 // NegFOp
 //===----------------------------------------------------------------------===//
 
-def NegFOp : RISCV_Op<"negf",
+def NegFOp : ROCC_Op<"negf",
     [Pure]> {
   let summary = "floating point negation";
   let description = [{
@@ -523,10 +523,10 @@ def NegFOp : RISCV_Op<"negf",
 
     ```mlir
     // Scalar negation value.
-    %a = riscv.negf %b : f64
+    %a = rocc.negf %b : f64
 
     // Tensor element-wise negation value.
-    %x = riscv.negf %y : tensor<4x2xf8>
+    %x = rocc.negf %y : tensor<4x2xf8>
     ```
   }];
 
@@ -536,7 +536,7 @@ def NegFOp : RISCV_Op<"negf",
 //===----------------------------------------------------------------------===//
 // CmpIOp
 //===----------------------------------------------------------------------===//
-def CmpIOp : RISCV_Op<"cmpi", [Pure]> {
+def CmpIOp : ROCC_Op<"cmpi", [Pure]> {
   let summary = "integer comparison operation";
   let description = [{
     The `cmpi` operation is a generic comparison for integer-like types.  
@@ -559,16 +559,16 @@ def CmpIOp : RISCV_Op<"cmpi", [Pure]> {
 
     ```mlir
     // Scalar comparison.
-    %0 = "riscv.cmpi"(%lhs, %rhs) {predicate = "slt"} 
+    %0 = "rocc.cmpi"(%lhs, %rhs) {predicate = "slt"} 
         : (i32, i32) -> i1
 
     // Tensor elementwise comparison.
-    %1 = "riscv.cmpi"(%a, %b) {predicate = "eq"} 
+    %1 = "rocc.cmpi"(%a, %b) {predicate = "eq"} 
         : (tensor<4xi64>, tensor<4xi64>) -> tensor<4xi1>
     ```
   }];
 
-  // let arguments = (ins RISCVTensor:$lhs, RISCVTensor:$rhs, StrAttr:$predicate);
+  // let arguments = (ins ROCCTensor:$lhs, ROCCTensor:$rhs, StrAttr:$predicate);
   // let arguments = (ins SignlessIntegerOrIndexLikeOfAnyRank:$lhs, SignlessIntegerOrIndexLikeOfAnyRank:$rhs, StrAttr:$predicate);
   let arguments = (ins SignlessIntegerOrIndexLike:$lhs, SignlessIntegerOrIndexLike:$rhs, StrAttr:$predicate);
   
@@ -580,7 +580,7 @@ def CmpIOp : RISCV_Op<"cmpi", [Pure]> {
 //===----------------------------------------------------------------------===//
 // CmpFOp
 //===----------------------------------------------------------------------===//
-def CmpFOp : RISCV_Op<"cmpf", [Pure]> {
+def CmpFOp : ROCC_Op<"cmpf", [Pure]> {
   let summary = "floating-point comparison operation";
   let description = [{
     The `cmpf` operation compares its two operands according to the float
@@ -595,10 +595,10 @@ def CmpFOp : RISCV_Op<"cmpf", [Pure]> {
 
     ```mlir
     // Scalar comparison.
-    %0 = "riscv.cmpf"(%lhs, %rhs) {predicate = "slt"} 
+    %0 = "rocc.cmpf"(%lhs, %rhs) {predicate = "slt"} 
         : (f32, f32) -> i1
     //Tensor elementwise comparison.
-    %1 = "riscv.cmpf"(%a, %b) {predicate = "eq"} 
+    %1 = "rocc.cmpf"(%a, %b) {predicate = "eq"} 
         : (tensor<4xf32>, tensor<4xf32>) -> tensor<4xi1>
     ```
   }];
@@ -614,12 +614,12 @@ def CmpFOp : RISCV_Op<"cmpf", [Pure]> {
 //===----------------------------------------------------------------------===//
 // BarrierOp
 //===----------------------------------------------------------------------==
-def BarrierOp : RISCV_Op<"barrier", []> {
+def BarrierOp : ROCC_Op<"barrier", []> {
     let summary = "Wait for dependent computations to finish.";
     let description = [{Blocks until the value of the associated future is present.
                        This operation can also be used to enforce a particular scheduling on the execution graph.}];
 
-    let arguments = (ins RISCVTensor:$value);
+    let arguments = (ins ROCCTensor:$value);
     let results = (outs AnyRankedTensor:$result);
 
     let assemblyFormat = "$value attr-dict `:` qualified(type($value)) `->` type($result)";
@@ -627,11 +627,11 @@ def BarrierOp : RISCV_Op<"barrier", []> {
 //===----------------------------------------------------------------------===//
 // NocOp
 //===----------------------------------------------------------------------==
-def NocOp : RISCV_Op<"noc", []> {
+def NocOp : ROCC_Op<"noc", []> {
     let summary = "On-Chip Network Communication.";
     let description = [{TODO.}];
 
-    let arguments = (ins RISCVTensor:$value);
+    let arguments = (ins ROCCTensor:$value);
     let results = (outs AnyRankedTensor:$result);
 
     let assemblyFormat = "$value attr-dict `:` qualified(type($value)) `->` type($result)";
@@ -641,19 +641,19 @@ def NocOp : RISCV_Op<"noc", []> {
 // Conv2DOp
 //===----------------------------------------------------------------------===//
 
-def Conv2DOp : RISCV_Op<"conv2d", 
+def Conv2DOp : ROCC_Op<"conv2d", 
     [Pure]> {
-    let summary = "RISCV dialect convolution 2d operation";
+    let summary = "ROCC dialect convolution 2d operation";
     let description = [{
         Performs a 2D convolution on the input tensor using specified kernel.
         Example:
-        %output = "riscv.conv2d"(%input, %kernel) : (tensor<4x4xf32>, tensor<2x2xf32>) -> tensor<3x3xf32>
+        %output = "rocc.conv2d"(%input, %kernel) : (tensor<4x4xf32>, tensor<2x2xf32>) -> tensor<3x3xf32>
     }];
 
-    let arguments = (ins RISCVTensor:$input, RISCVTensor:$kernel);
-    // let arguments = (ins RISCVTensor:$input, RISCVTensor:$kernel, RISCVTensor:$bias);
+    let arguments = (ins ROCCTensor:$input, ROCCTensor:$kernel);
+    // let arguments = (ins ROCCTensor:$input, ROCCTensor:$kernel, ROCCTensor:$bias);
 
-    let results = (outs RISCVTensor:$output);
+    let results = (outs ROCCTensor:$output);
 
     // let builders = [
     //     OpBuilder<(ins "mlir::Value":$input, "mlir::Value":$kernel, "mlir::Value":$bias)>
@@ -671,17 +671,17 @@ def Conv2DOp : RISCV_Op<"conv2d",
 //===----------------------------------------------------------------------===//
 // LaunchOp
 //===----------------------------------------------------------------------===//
-def LaunchOp : RISCV_Op<"launch", [  RISCV_AsyncOpInterface, 
-                                     RISCV_HierarchyInterface, 
+def LaunchOp : ROCC_Op<"launch", [  ROCC_AsyncOpInterface, 
+                                     ROCC_HierarchyInterface, 
                                      AttrSizedOperandSegments,  //MLIR变长操作数的分段管理                                  
                                      IsolatedFromAbove,//MLIR特性，标记操作的region是上层隔离的
                                      AffineScope,  //MLIR特性，为操作创建一个仿射作用域
                                      SingleBlockImplicitTerminator<"LaunchTerminatorOp">]>,
                           Arguments<(ins OptionalAttr<SymbolNameAttr>:$sym_name,
-                                         Variadic<RISCV_AsyncToken>:$async_dependencies,
+                                         Variadic<ROCC_AsyncToken>:$async_dependencies,
                                          Variadic<Index>:$sizes,
                                          Variadic<AnyType>:$launch_operands)>,                                        
-                          Results<(outs Optional<RISCV_AsyncToken>:$async_token)>{
+                          Results<(outs Optional<ROCC_AsyncToken>:$async_token)>{
 //async_token作为该launch操作完成的信号：当操作执行完毕后，会发出该令牌，后续依赖该操作的异步任务可通过此令牌同步
   let summary = "Launch";
   let description = [{Launch}];
@@ -740,11 +740,11 @@ def LaunchOp : RISCV_Op<"launch", [  RISCV_AsyncOpInterface,
 //===----------------------------------------------------------------------===//
 // LaunchTerminatorOp
 //===----------------------------------------------------------------------===//
-def LaunchTerminatorOp : RISCV_Op<"launch_terminator", [HasParent<"LaunchOp">,
+def LaunchTerminatorOp : ROCC_Op<"launch_terminator", [HasParent<"LaunchOp">,
                                                           Pure,
                                                           Terminator]>,
                                     Arguments<(ins)>, Results<(outs)> {
-  let summary = "Terminator for `riscv.launch`.";
+  let summary = "Terminator for `rocc.launch`.";
   let description = [{
     A terminator operation for the body of `air.launch` operations.
     `air.launch` operations are not expected to return any value so the
@@ -755,18 +755,18 @@ def LaunchTerminatorOp : RISCV_Op<"launch_terminator", [HasParent<"LaunchOp">,
 //===----------------------------------------------------------------------===//
 // HerdOp
 //===----------------------------------------------------------------------===//
-def HerdOp : RISCV_Op<"herd", [ RISCV_AsyncOpInterface, 
-                                RISCV_HierarchyInterface, 
+def HerdOp : ROCC_Op<"herd", [ ROCC_AsyncOpInterface, 
+                                ROCC_HierarchyInterface, 
                                 AttrSizedOperandSegments,                              
                                 IsolatedFromAbove,
                                 AffineScope,  
                                 SingleBlockImplicitTerminator<"HerdTerminatorOp">]>,
                           Arguments<(ins OptionalAttr<SymbolNameAttr>:$sym_name,
                                          OptionalAttr<StrAttr>:$link_with,
-                                         Variadic<RISCV_AsyncToken>:$async_dependencies,
+                                         Variadic<ROCC_AsyncToken>:$async_dependencies,
                                          Variadic<Index>:$sizes,
                                          Variadic<AnyType>:$herd_operands)>,                                        
-                          Results<(outs Optional<RISCV_AsyncToken>:$async_token)>{
+                          Results<(outs Optional<ROCC_AsyncToken>:$async_token)>{
   let summary = "Herd";
   let description = [{Herd}];
   let regions = (region SizedRegion<1>:$body);
@@ -840,14 +840,14 @@ def HerdOp : RISCV_Op<"herd", [ RISCV_AsyncOpInterface,
 //===----------------------------------------------------------------------===//
 // HerdTerminatorOp
 //===----------------------------------------------------------------------===//
-def HerdTerminatorOp : RISCV_Op<"herd_terminator", [HasParent<"HerdOp">,
+def HerdTerminatorOp : ROCC_Op<"herd_terminator", [HasParent<"HerdOp">,
                                                           Pure,
                                                           Terminator]>,
                                     Arguments<(ins)>, Results<(outs)> {
-  let summary = "Terminator for `riscv.herd`.";
+  let summary = "Terminator for `rocc.herd`.";
   let description = [{
-    A terminator operation for the body of `riscv.herd` operations.
-    `riscv.herd` operations are not expected to return any value so the
+    A terminator operation for the body of `rocc.herd` operations.
+    `rocc.herd` operations are not expected to return any value so the
     terminator takes no operands.
   }];
   let assemblyFormat = "attr-dict";
@@ -855,8 +855,8 @@ def HerdTerminatorOp : RISCV_Op<"herd_terminator", [HasParent<"HerdOp">,
 //===----------------------------------------------------------------------===//
 // AllocOp
 //===----------------------------------------------------------------------===//
-def AllocOp: RISCV_Op<"alloc", []> {
-  let summary = "RISCV Allocation Op";
+def AllocOp: ROCC_Op<"alloc", []> {
+  let summary = "ROCC Allocation Op";
   let arguments = (ins);
   let results = (outs AnyMemRef:$result);
   let assemblyFormat = [{
@@ -870,8 +870,8 @@ def AllocOp: RISCV_Op<"alloc", []> {
 //===----------------------------------------------------------------------===//
 // DeallocOp
 //===----------------------------------------------------------------------===//
-def DeallocOp: RISCV_Op<"dealloc", []> {
-  let summary = "RISCV Deallocation Op";
+def DeallocOp: ROCC_Op<"dealloc", []> {
+  let summary = "ROCC Deallocation Op";
   let arguments = (ins AnyMemRef:$memref);
 
   let results = (outs);
@@ -879,21 +879,21 @@ def DeallocOp: RISCV_Op<"dealloc", []> {
     attr-dict $memref `:` type($memref)
   }];
   let description = [{
-    RISCV Deallocation Op
+    ROCC Deallocation Op
   }];
   // let hasCanonicalizer  = 1;
 }
 //===----------------------------------------------------------------------===//
 // Template of *_DRV  
 //===----------------------------------------------------------------------===//
-class RISCV_DRV_Op<string opName> : RISCV_Op<opName,
-      [RISCV_AsyncOpInterface,
-       RISCV_MemcpyInterface,
+class ROCC_DRV_Op<string opName> : ROCC_Op<opName,
+      [ROCC_AsyncOpInterface,
+       ROCC_MemcpyInterface,
        AttrSizedOperandSegments]> {
 
   let summary = "dma operator";
   let arguments = (
-    ins Variadic<RISCV_AsyncToken>:$async_dependencies,
+    ins Variadic<ROCC_AsyncToken>:$async_dependencies,
         AnyRankedOrUnrankedMemRef:$dst,
         Variadic<Index>:$dst_offsets,
         Variadic<Index>:$dst_sizes,
@@ -904,7 +904,7 @@ class RISCV_DRV_Op<string opName> : RISCV_Op<opName,
         Variadic<Index>:$src_strides
   );
 
-  let results = (outs Optional<RISCV_AsyncToken>:$async_token);
+  let results = (outs Optional<ROCC_AsyncToken>:$async_token);
 
   let assemblyFormat = [{
     custom<AsyncDependencies>(type($async_token), $async_dependencies)
@@ -932,17 +932,17 @@ class RISCV_DRV_Op<string opName> : RISCV_Op<opName,
 //===----------------------------------------------------------------------===//
 // *_DRV OP
 //===----------------------------------------------------------------------===//
-def LoadDrvOp : RISCV_DRV_Op<"load">;
-def StoreDrvOp : RISCV_DRV_Op<"store">;
+def LoadDrvOp : ROCC_DRV_Op<"load">;
+def StoreDrvOp : ROCC_DRV_Op<"store">;
 
 
 //===----------------------------------------------------------------------===//
 // WaitAllOp
 //===----------------------------------------------------------------------===//
-def WaitAllOp: RISCV_Op<"wait_all", [RISCV_AsyncOpInterface]> {
-  let arguments = (ins Variadic<RISCV_AsyncToken>:$async_dependencies);
+def WaitAllOp: ROCC_Op<"wait_all", [ROCC_AsyncOpInterface]> {
+  let arguments = (ins Variadic<ROCC_AsyncToken>:$async_dependencies);
   let results = (
-    outs Optional<RISCV_AsyncToken>:$async_token
+    outs Optional<ROCC_AsyncToken>:$async_token
   );
 
   let summary = "wait for all operator";
@@ -950,7 +950,7 @@ def WaitAllOp: RISCV_Op<"wait_all", [RISCV_AsyncOpInterface]> {
     Wait for all async tokens before preceding.
     Example:
         %0 = air.wait_all async 
-        %4 = riscv.wait_all async [%a4, %a5] 
+        %4 = rocc.wait_all async [%a4, %a5] 
   }];
 
   let assemblyFormat = [{
@@ -969,7 +969,7 @@ def WaitAllOp: RISCV_Op<"wait_all", [RISCV_AsyncOpInterface]> {
 //===----------------------------------------------------------------------===//
 // QuantizationOp
 //===----------------------------------------------------------------------===//
-// def QuantizationOp : RISCV_Op<"quantization",
+// def QuantizationOp : ROCC_Op<"quantization",
 //     [Pure]> {
 //   let summary = "quantization operation";
 //   let description = [{
@@ -989,8 +989,8 @@ def WaitAllOp: RISCV_Op<"wait_all", [RISCV_AsyncOpInterface]> {
 //         Quantized coefficients: [ 3.125 -1.25   0.625 -3.125  4.375]
 //   }];
 
-//   let arguments = (ins RISCVTensor:$input, RISCVTensor:$Nlevels, RISCVTensor:$max, RISCVTensor:$min);
-//   let results = (outs RISCVTensor);
+//   let arguments = (ins ROCCTensor:$input, ROCCTensor:$Nlevels, ROCCTensor:$max, ROCCTensor:$min);
+//   let results = (outs ROCCTensor);
 
 //   // Enable registering canonicalization patterns with this operation.
 //   // let hasCanonicalizer = 1;
@@ -1003,7 +1003,7 @@ def WaitAllOp: RISCV_Op<"wait_all", [RISCV_AsyncOpInterface]> {
 //   // Indicate that additional verification for this operation is necessary.
 //   // let hasVerifier = 1;
 // }
-// def DequantizationOp : RISCV_Op<"dequantization",
+// def DequantizationOp : ROCC_Op<"dequantization",
 //     [Pure]> {
 //   let summary = "dequantization operation";
 //   let description = [{
@@ -1022,8 +1022,8 @@ def WaitAllOp: RISCV_Op<"wait_all", [RISCV_AsyncOpInterface]> {
 //         Recovered coefficients: [ 3.125 -1.25   0.625 -3.125  4.375]
 //   }];
 
-//   let arguments = (ins RISCVTensor:$quant_input, RISCVTensor:$Nlevels, RISCVTensor:$max, RISCVTensor:$min);
-//   let results = (outs RISCVTensor);
+//   let arguments = (ins ROCCTensor:$quant_input, ROCCTensor:$Nlevels, ROCCTensor:$max, ROCCTensor:$min);
+//   let results = (outs ROCCTensor);
 
 //   let builders = [
 //     OpBuilder<(ins "mlir::Value":$quant_input, "mlir::Value":$Nlevels, "mlir::Value":$max, "mlir::Value":$min)>
@@ -1036,22 +1036,22 @@ def WaitAllOp: RISCV_Op<"wait_all", [RISCV_AsyncOpInterface]> {
 // FuncOp 
 //===----------------------------------------------------------------------===//
 
-def FuncOp : RISCV_Op<"func", [
+def FuncOp : ROCC_Op<"func", [
      FunctionOpInterface,IsolatedFromAbove
   ]> {
   let summary = "user defined function operation";
   let description = [{
-    The "riscv.func" operation represents a user defined function. These are
-    callable SSA-region operations that contain RISCV computations.
+    The "rocc.func" operation represents a user defined function. These are
+    callable SSA-region operations that contain ROCC computations.
 
     Example:
 
     ```mlir
-    riscv.func @main() {
-      %0 = riscv.constant dense<5.500000e+00> : tensor<f64>
-      %1 = riscv.reshape(%0 : tensor<f64>) to tensor<2x2xf64>
-      riscv.print %1 : tensor<2x2xf64>
-      riscv.return
+    rocc.func @main() {
+      %0 = rocc.constant dense<5.500000e+00> : tensor<f64>
+      %1 = rocc.reshape(%0 : tensor<f64>) to tensor<2x2xf64>
+      rocc.print %1 : tensor<2x2xf64>
+      rocc.return
     }
     ```
   }];
@@ -1089,7 +1089,7 @@ def FuncOp : RISCV_Op<"func", [
 // ReturnOp
 //===----------------------------------------------------------------------===//
 
-def ReturnOp : RISCV_Op<"return", [Pure, HasParent<"FuncOp">,
+def ReturnOp : ROCC_Op<"return", [Pure, HasParent<"FuncOp">,
                                  Terminator]> {
   let summary = "return operation";
   let description = [{
@@ -1099,16 +1099,16 @@ def ReturnOp : RISCV_Op<"return", [Pure, HasParent<"FuncOp">,
     the operation. For example:
 
     ```mlir
-      riscv.func @foo() -> tensor<2xf64> {
+      rocc.func @foo() -> tensor<2xf64> {
         ...
-        riscv.return %0 : tensor<2xf64>
+        rocc.return %0 : tensor<2xf64>
       }
     ```
   }];
 
   // The return operation takes an optional input operand to return. This
   // value must match the return type of the enclosing function.
-  let arguments = (ins Variadic<RISCVTensor>:$input);
+  let arguments = (ins Variadic<ROCCTensor>:$input);
 
   // The return operation only emits the input in the format if it is present.
   let assemblyFormat = "($input^ `:` type($input))? attr-dict ";
@@ -1130,7 +1130,7 @@ def ReturnOp : RISCV_Op<"return", [Pure, HasParent<"FuncOp">,
 // Base class for NCHW pooling ops   
 //===----------------------------------------------------------------------===//
 class PoolingNchwBaseOp<string mnemonic, string opDoc>
-  : RISCV_Op<mnemonic, [Pure]> {
+  : ROCC_Op<mnemonic, [Pure]> {
 
   let summary = opDoc;
   let description = [{
@@ -1148,7 +1148,7 @@ class PoolingNchwBaseOp<string mnemonic, string opDoc>
 
     Example:
     ```mlir
-    riscv.}] # mnemonic # [{
+    rocc.}] # mnemonic # [{
       {dilations = dense<[1, 1]> : vector<2xi64>,
        strides   = dense<[2, 2]> : vector<2xi64>}
       ins(%input, %kernel : memref<1x64x114x114xf32>, memref<3x3xf32>)
@@ -1194,10 +1194,10 @@ def Conv2dNchwFchwOp
 //===----------------------------------------------------------------------===//
 // WorldOp 
 //===----------------------------------------------------------------------===//
-def WorldOp : RISCV_Op<"world", [Pure]> {
-    let summary = "print RISCV, World";
+def WorldOp : ROCC_Op<"world", [Pure]> {
+    let summary = "print ROCC, World";
     let description = [{
-        The "world" operation prints "RISCV, World", and produces
+        The "world" operation prints "ROCC, World", and produces
         no results.
     }];
 }

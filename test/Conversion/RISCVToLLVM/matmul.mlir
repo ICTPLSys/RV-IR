@@ -1,4 +1,4 @@
-// RUN: torch-mlir-opt <%s --convert-riscv-to-affine | FileCheck %s
+// RUN: torch-mlir-opt <%s --convert-rocc-to-affine | FileCheck %s
 
 // CHECK: affine.for %{{.*}} = 0 to 16 {
 // CHECK:   affine.for %{{.*}} = 0 to 64 {
@@ -16,7 +16,7 @@ module attributes {torch.debug_module_name = "Linear"} {
     linalg.fill ins(%cst : f32) outs(%alloc_0 : memref<16x64xf32>)
     %alloc_1 = memref.alloc() {alignment = 64 : i64} : memref<16x64xf32>
     memref.copy %alloc_0, %alloc_1 : memref<16x64xf32> to memref<16x64xf32>
-    riscv.matmul ins(%arg0, %0 : memref<16x32xf32, strided<[?, ?], offset: ?>>, memref<32x64xf32>) outs(%alloc_1 : memref<16x64xf32>)
+    rocc.matmul ins(%arg0, %0 : memref<16x32xf32, strided<[?, ?], offset: ?>>, memref<32x64xf32>) outs(%alloc_1 : memref<16x64xf32>)
     return %alloc_1 : memref<16x64xf32>
   }
 }

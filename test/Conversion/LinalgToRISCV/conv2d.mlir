@@ -1,5 +1,5 @@
-// RUN: torch-mlir-opt <%s -convert-linalg-to-riscv | FileCheck %s
-// CHECK: riscv.conv2d
+// RUN: torch-mlir-opt <%s -convert-linalg-to-rocc | FileCheck %s
+// CHECK: rocc.conv2d
 func.func @main() {
     // Create input matrices
     %input = arith.constant dense<[[1.0, 2.0, 3.0, 4.0],[5.0, 6.0, 7.0, 8.0],
@@ -13,7 +13,7 @@ func.func @main() {
                        outs(%output : tensor<3x3xf64>) -> tensor<3x3xf64>
     
     // Print results
-    "riscv.print"(%res) : (tensor<3x3xf64>) -> ()
+    "rocc.print"(%res) : (tensor<3x3xf64>) -> ()
     
     return
 }

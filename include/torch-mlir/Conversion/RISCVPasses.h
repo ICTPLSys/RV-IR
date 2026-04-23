@@ -6,15 +6,15 @@
 // #include "torch-mlir/Conversion/LinalgToRISCV/LinalgToRISCV.h"
 // #include "torch-mlir/Conversion/RISCVToAffine/RISCVToAffine.h"
 // #include "torch-mlir/Conversion/RISCVToLLVM/RISCVToLLVM.h"
-namespace riscv {
+namespace rocc {
 
 //===- Generated passes ---------------------------------------------------===//
 // #define GEN_PASS_REGISTRATION
 // #include "torch-mlir/Conversion/RISCVPasses.h.inc"
-void registerRISCVConversionPasses();
+void registerROCCConversionPasses();
 //===----------------------------------------------------------------------===//
 
-} // namespace riscv
+} // namespace rocc
 namespace cim {
 void registerCIMConversionPasses();
 

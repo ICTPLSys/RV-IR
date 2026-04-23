@@ -1,4 +1,4 @@
-// RUN: torch-mlir-opt <%s --convert-riscv-to-affine  %s | FileCheck %s
+// RUN: torch-mlir-opt <%s --convert-rocc-to-affine  %s | FileCheck %s
 
 // CHECK-LABEL: func.func @wait
 // CHECK: %[[T0:.*]] = async.execute {
@@ -6,9 +6,9 @@
 // CHECK: async.await %[[T0]] : !async.token
 // CHECK: async.await %[[T1]] : !async.token
 func.func @wait() {
-  %1 = riscv.wait_all async
-  %2 = riscv.wait_all async [%1]
-  riscv.wait_all [%1, %2]
+  %1 = rocc.wait_all async
+  %2 = rocc.wait_all async [%1]
+  rocc.wait_all [%1, %2]
   return
 }
 // CHECK-LABEL:   func.func @launch(
@@ -18,7 +18,7 @@ func.func @wait() {
 func.func @launch(%arg0: memref<16xf16>, %arg1: memref<16xf16>) {
   %c2 = arith.constant 2 : index
   %c4 = arith.constant 4 : index
-  riscv.launch (%arg2, %arg3, %arg4) in (%arg5=%c4, %arg6=%c2, %arg7=%c2) args(%arg8=%arg0, %arg9=%arg1) : memref<16xf16>, memref<16xf16> {
+  rocc.launch (%arg2, %arg3, %arg4) in (%arg5=%c4, %arg6=%c2, %arg7=%c2) args(%arg8=%arg0, %arg9=%arg1) : memref<16xf16>, memref<16xf16> {
   }
   return
 }

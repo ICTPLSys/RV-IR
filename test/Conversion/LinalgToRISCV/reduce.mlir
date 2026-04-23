@@ -1,5 +1,5 @@
-// RUN: torch-mlir-opt <%s -convert-linalg-to-riscv | FileCheck %s
-// CHECK: riscv.reduce
+// RUN: torch-mlir-opt <%s -convert-linalg-to-rocc | FileCheck %s
+// CHECK: rocc.reduce
 func.func @main() {
     // Create input tensor
     %input = arith.constant dense<[
@@ -8,7 +8,7 @@ func.func @main() {
     ]> : tensor<2x3xf64>
 
     // Print input
-    "riscv.print"(%input) : (tensor<2x3xf64>) -> ()
+    "rocc.print"(%input) : (tensor<2x3xf64>) -> ()
 
     // Initialize reduction output (for sum along dimension 0 → tensor<3xf64>)
     %init = arith.constant dense<0.0> : tensor<3xf64>
@@ -24,7 +24,7 @@ func.func @main() {
         } 
 
     // Print reduced result
-    "riscv.print"(%sum) : (tensor<3xf64>) -> ()
+    "rocc.print"(%sum) : (tensor<3xf64>) -> ()
 
     return
 }

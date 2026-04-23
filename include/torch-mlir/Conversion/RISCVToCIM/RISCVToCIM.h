@@ -5,5 +5,5 @@
 
 namespace cim {
 
-std::unique_ptr<mlir::OperationPass<mlir::func::FuncOp>> createRISCVLowerToCIMPass();
-} // namespace riscv
+std::unique_ptr<mlir::OperationPass<mlir::func::FuncOp>> createROCCLowerToCIMPass();
+} // namespace cim

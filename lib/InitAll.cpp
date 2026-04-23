@@ -47,7 +47,7 @@
 
 
 void mlir::torch::registerAllDialects(mlir::DialectRegistry &registry) {  
-  registry.insert<riscv::RISCVDialect>();  //让RISCV Op合法化
+  registry.insert<rocc::ROCCDialect>();  //让RISCV Op合法化
   registry.insert<mlir::bufferization::BufferizationDialect>();  
   registry.insert<mlir::func::FuncDialect>();
   registry.insert<mlir::torch::Torch::TorchDialect>();
@@ -77,7 +77,7 @@ void mlir::torch::registerAllPasses() {
   mlir::torch::registerTorchConversionPasses();
 
   mlir::torch::registerConversionPasses();
-  riscv::registerRISCVConversionPasses();    //注册RISCV的转换Pass
+  rocc::registerROCCConversionPasses();    //注册RISCV的转换Pass
   cim::registerCIMConversionPasses();    //注册RISCV的转换Pass
 
 

@@ -1,6 +1,6 @@
-//RUN: torch-mlir-opt <%s -convert-linalg-to-riscv | FileCheck %s
-// CHECK: riscv.transpose
-// CHECK: riscv.batch_matmul
+//RUN: torch-mlir-opt <%s -convert-linalg-to-rocc | FileCheck %s
+// CHECK: rocc.transpose
+// CHECK: rocc.batch_matmul
 #map = affine_map<(d0, d1, d2) -> (d1, d2)>
 #map1 = affine_map<(d0, d1, d2) -> (d0, d1, d2)>
 module attributes {torch.debug_module_name = "Linear"} {

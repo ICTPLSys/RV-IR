@@ -1,21 +1,16 @@
-//RUN: torch-mlir-opt <%s -convert-linalg-to-riscv -convert-riscv-to-affine -convert-riscv-to-llvm | FileCheck %s
+//RUN: torch-mlir-opt <%s -convert-linalg-to-rocc | FileCheck %s
 // CHECK: llvm.func @main()
-func.func @main() {
-    // Create input matrices
-    %A = arith.constant dense<[[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]> : tensor<2x3xf64>
-    %B = arith.constant dense<[[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]]> : tensor<3x2xf64>
-    
-    // Create output matrix initialized to zero
-    %C_init = arith.constant dense<0.0> : tensor<2x2xf64>
-    
-    // Perform matrix multiplication using linalg.matmul
-    %C = linalg.matmul ins(%A, %B : tensor<2x3xf64>, tensor<3x2xf64>) 
-                       outs(%C_init : tensor<2x2xf64>) -> tensor<2x2xf64>
-    
-    // Print results
-    "riscv.print"(%A) : (tensor<2x3xf64>) -> ()
-    "riscv.print"(%B) : (tensor<3x2xf64>) -> ()
-    "riscv.print"(%C) : (tensor<2x2xf64>) -> ()
-    
-    return
+#map = affine_map<(d0, d1) -> (d0, d1)>
+#map1 = affine_map<(d0, d1) -> (d0, d1)>
+module attributes {torch.debug_module_name = "MatmulOnly"} {
+  func.func @forward(%arg0: memref<16x32xf32, strided<[?, ?], offset: ?>>,
+                     %arg1: memref<32x64xf32, strided<[?, ?], offset: ?>>) -> memref<16x64xf32> {
+    %cst = arith.constant 0.000000e+00 : f32
+    %alloc = memref.alloc() {alignment = 64 : i64} : memref<16x64xf32>
+    linalg.fill ins(%cst : f32) outs(%alloc : memref<16x64xf32>)
+    linalg.matmul ins(%arg0, %arg1 : memref<16x32xf32, strided<[?, ?], offset: ?>>,
+                            memref<32x64xf32, strided<[?, ?], offset: ?>>)
+                 outs(%alloc : memref<16x64xf32>)
+    return %alloc : memref<16x64xf32>
+  }
 }
