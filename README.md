@@ -88,21 +88,21 @@ pip install --pre torch-mlir torchvision \
 2. Choose command relevant to LLVM setup:
     1. **If you want the more straightforward option**, run the "in-tree" setup:
         ```shell
-        cmake -GNinja -Bbuild \
-          `# Enables "--debug" and "--debug-only" flags for the "torch-mlir-opt" tool` \
+        cmake -GNinja -B build \
           -DCMAKE_BUILD_TYPE=RelWithDebInfo \
-          -DPython3_EXECUTABLE=$(which python3) \
-          -DPython_EXECUTABLE=$(which python3) \
           -DLLVM_ENABLE_ASSERTIONS=ON \
           -DPython3_FIND_VIRTUALENV=ONLY \
           -DPython_FIND_VIRTUALENV=ONLY \
           -DMLIR_ENABLE_BINDINGS_PYTHON=ON \
+          -DLLVM_EXPERIMENTAL_TARGETS_TO_BUILD="RISCV"\
           -DLLVM_TARGETS_TO_BUILD=host \
-          `# For building LLVM "in-tree"` \
-          externals/llvm-project/llvm \
           -DLLVM_ENABLE_PROJECTS=mlir \
-          -DLLVM_EXTERNAL_PROJECTS="torch-mlir" \
-          -DLLVM_EXTERNAL_TORCH_MLIR_SOURCE_DIR="$PWD"
+          -DLLVM_EXTERNAL_PROJECTS=torch-mlir \
+          -DMLIR_BUILD_TOOLS=ON \
+          -DLLVM_EXTERNAL_TORCH_MLIR_SOURCE_DIR="$PWD" \
+          -DTORCH_MLIR_ENABLE_PYTORCH_EXTENSIONS=ON \
+          -DTORCH_MLIR_ENABLE_JIT_IR_IMPORTER=ON\
+          externals/llvm-project/llvm
         ```
         - NOTE: uses external/llvm-project/llvm as the main build, so LLVM will be built in addition to torch-mlir and its sub-projects.
     2. **If you want to use a separate build of LLVM from another directory**, run the "out-of-tree" setup:
