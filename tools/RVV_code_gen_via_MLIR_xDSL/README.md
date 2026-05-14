@@ -15,54 +15,25 @@ Generate RVV GEMM microkernels locally, sync them to a RISC-V board, run benchma
 make install
 ```
 
-4. Edit `compile.sh` (top of file) with your board info
-- `RISCV_USER`
-- `RISCV_REMOTE_IP`
-- `RISCV_SSH_PORT` (optional)
-- Optional tuning: `FAMILIES`, `VLEN_BITS`, `KC_PROFILE`, `DATASETS`
-
-5. Run the pipeline
+4. Run the pipeline
 ```bash
-bash compile.sh
+bash riscv_compile.sh
 ```
+That’s it. The script will:
+- Build `mlir-translate` locally if missing.
+- Generate kernels, compile, benchmark, and pull results back.
 
 Example with explicit connection and tuning options:
 ```bash
-./compile.sh --riscv-user jlei --riscv-ip jbpi2 --riscv-port 22 --families "2,2" --vlen 256
+./convert_linalg_mlir_to_c.sh tests/riscv_tests/mnist_rocc_memref.mlir --wd 16 --type fp
+./convert_linalg_mlir_to_c.sh tests/riscv_tests/resnet_rocc_memref.mlir --wd 16 --type fp
 ```
-
-That’s it. The script will:
-- Build `mlir-translate` locally if missing.
-- Build OpenBLAS and BLIS on the board if missing.
-- Generate kernels, compile, benchmark, and pull results back.
 
 ## Outputs
 
-Results are saved to `tests/output/` on your local machine:
-- `*.txt` logs
-- `*.csv` sweep tables
-- `*.png` / `*.pdf` plots
+Results are saved to `generated/` :
+- `*.cpp` simulator operator
+- `*.mlir` emitC
 
-## Common Variations
 
-Use a different MLIR build directory:
-```bash
-bash compile.sh --mlir-build-dir ../llvm-project
-```
 
-Override families or VLEN:
-```bash
-bash compile.sh --families "4,4" --vlen 256
-```
-
-## One-Off Setup Only
-
-Local MLIR/LLVM build:
-```bash
-bash setup_env.sh --local-mlir-only --mlir-build-dir ../llvm-project
-```
-
-Remote OpenBLAS/BLIS build:
-```bash
-bash setup_env.sh --remote-only --vlen 256 --riscv-workspace xdsl_rvv_microkernel
-```
