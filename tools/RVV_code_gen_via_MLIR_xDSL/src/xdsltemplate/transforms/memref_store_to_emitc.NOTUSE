@@ -1,0 +1,66 @@
+
+from typing import Sequence
+from xdsl.context import Context
+from xdsl.dialects import memref, emitc, builtin
+from xdsl.ir import Attribute, Operation
+from xdsl.pattern_rewriter import (
+    RewritePattern,
+    PatternRewriter,
+    op_type_rewrite_pattern,
+    PatternRewriteWalker,
+)
+from xdsl.passes import ModulePass
+
+# Reuse your EmitC ops from emitc_ext.py
+from xdsltemplate.dialects.emitc_ext import EmitCSubscriptOp
+from xdsltemplate.dialects.emitc_ext import EmitCStoreOp
+
+
+
+class ConvertMemrefStoreToEmitc(RewritePattern):
+    " Lower memref.store to emitc.store"
+
+    @op_type_rewrite_pattern
+    def match_and_rewrite(self, op: memref.StoreOp, rewriter: PatternRewriter):
+
+        base = op.memref
+        indicies: Sequence = list(op.indices)
+        value_to_store =op.value
+
+        # The store only work for 1d element, for now
+        if len(indicies) != 1:
+            return
+
+        # check if its emit c already??
+        if not isinstance(base.type, emitc.EmitC_PointerType):
+            return
+
+        # Infer element type from the pointer (e.g., f32)
+        if hasattr(base.type, "element_type"):
+            elem_ty = base.type.element_type
+        else:
+            elem_ty = value_to_store.type
+        lvalue_ty = emitc.EmitC_LValueType(elem_ty)
+        subscript_op = EmitCSubscriptOp(base, indicies[0], lvalue_ty)
+
+        # #
+        # element_ty: Attribute = base.type
+        # lvalue_ty = emitc.EmitC_LValueType(element_ty)
+        # # if its memref keep on
+        # subscript_op = EmitCSubscriptOp(base, indicies[0], lvalue_ty)
+
+
+        store_op = EmitCStoreOp(value_to_store, subscript_op.results[0])
+
+        rewriter.replace_matched_op(
+            [subscript_op, store_op],
+            new_results=[]
+        )
+
+class MemrefStoreToEmitcPass(ModulePass):
+    name = "memref_store_to_emitc"
+    def apply(self, ctx: Context, op: builtin.ModuleOp) -> None:
+        PatternRewriteWalker(
+            ConvertMemrefStoreToEmitc(),
+            apply_recursively=True,
+        ).rewrite_module(op)

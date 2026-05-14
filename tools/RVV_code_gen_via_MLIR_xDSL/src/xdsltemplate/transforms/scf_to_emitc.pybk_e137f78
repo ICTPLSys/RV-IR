@@ -1,0 +1,188 @@
+# xdsltemplate/transforms/scf_to_emitc.py
+from xdsl.context import Context
+from xdsl.dialects import arith, builtin, emitc, scf
+from xdsl.dialects.builtin import Float32Type, FloatAttr, ModuleOp
+from xdsl.irdl import IRDLOperation, irdl_op_definition, result_def
+from xdsl.passes import ModulePass
+from xdsl.pattern_rewriter import (
+    PatternRewriter,
+    PatternRewriteWalker,
+    RewritePattern,
+    op_type_rewrite_pattern,
+)
+from xdsl.dialects.builtin import StringAttr
+
+from xdsltemplate.dialects.emitc_ext import EmitCLoadOp
+from xdsltemplate.dialects.rvv import RVVFloat32M1Type  # Import your RVV type
+
+
+@irdl_op_definition
+class EmitCVariableOp(IRDLOperation):
+    name = "emitc.variable"
+    res = result_def(emitc.EmitC_LValueType)
+
+
+@irdl_op_definition
+class EmitCAssignOp(IRDLOperation):
+    name = "emitc.assign"
+
+
+@irdl_op_definition
+class EmitCForOp(IRDLOperation):
+    name = "emitc.for"
+
+
+@irdl_op_definition
+class EmitCYieldOp(IRDLOperation):
+    name = "emitc.yield"
+
+
+def convert_type_for_emitc_variable(ty):
+    """
+    Convert a type to the appropriate emitc.variable result type.
+    For RVV types, returns !emitc.opaque<"vfloat32m1_t">
+    For standard types, returns ty as-is
+    """
+    # Check if it's an RVV vector type
+    if isinstance(ty, RVVFloat32M1Type):
+        return emitc.EmitC_OpaqueType(StringAttr("vfloat32m1_t"))
+
+    # Check by name if the above doesn't match your type structure
+    if hasattr(ty, 'name') and 'rvv' in str(ty.name).lower():
+        if 'vfloat32m1' in str(ty.name).lower() or 'f32' in str(ty).lower():
+            return emitc.EmitC_OpaqueType(StringAttr("vfloat32m1_t"))
+
+    return ty
+
+
+def get_emitc_variable_value_attr(ty):
+    """
+    Get the appropriate value attribute for emitc.variable.
+    For opaque types, use #emitc.opaque<"">
+    For standard types, use the default float attr.
+    """
+    if isinstance(ty, emitc.EmitC_OpaqueType):
+        return emitc.EmitC_OpaqueAttr(StringAttr(""))
+    return FloatAttr(0.0, Float32Type())
+
+class ConvertScfForToEmitCFor(RewritePattern):
+    """
+    Convert scf.for with iter_args into emitc.for + emitc.variable/assign structure.
+    """
+
+    @op_type_rewrite_pattern
+    def match_and_rewrite(self, op: scf.ForOp, rewriter: PatternRewriter):
+        # handle only single accumulator
+        if len(op.iter_args) != 1:
+            return
+
+        init_acc = op.iter_args[0]
+        acc_ty = init_acc.type
+
+        # Convert RVV types to emitc opaque types
+        # emitc_inner_ty = convert_type_for_emitc_variable(acc_ty)
+        # emitc_lvalue_ty = emitc.LValueType(emitc_inner_ty)
+
+        emitc_inner_ty = convert_type_for_emitc_variable(acc_ty)
+        emitc_lvalue_ty = emitc.EmitC_LValueType(emitc_inner_ty)
+
+        # Get the appropriate value attribute
+        value_attr = get_emitc_variable_value_attr(emitc_inner_ty)
+
+        # Create the variable with proper emitc types
+        emitc_var = EmitCVariableOp.create(
+            operands=[],
+            result_types=[emitc_lvalue_ty],
+            attributes={
+                "value": value_attr,
+            },
+        )
+        rewriter.insert_op_before_matched_op(emitc_var)
+
+        ## here, iniciate the vector
+        init_assign = EmitCAssignOp.create(
+            operands=[emitc_var.results[0], init_acc],  # init_acc is the iter_args initial value
+            result_types=[],
+        )
+        rewriter.insert_op_before_matched_op(init_assign)
+
+
+        # here we replace the scf.yield with emitc.assign
+        for inner_op in op.body.ops:
+            if isinstance(inner_op, scf.YieldOp):
+                emitc_assign = EmitCAssignOp.create(
+                    operands=[emitc_var.results[0], inner_op.operands[0]],
+                    result_types=[],
+                )
+                rewriter.replace_op(inner_op, [emitc_assign])
+
+        # here we rewrite scf.for to emitc.for
+        lb, ub, step = op.lb, op.ub, op.step
+
+        from xdsl.ir import Block, Region
+
+        old_block = op.body.blocks[0]
+        iter_arg = old_block.args[1] if len(old_block.args) == 2 else None
+
+        # Create new block with only induction variable
+        new_block = Block(arg_types=[old_block.args[0].type])
+        new_block.args[0].name_hint = old_block.args[0].name_hint
+
+        from typing import cast
+        from xdsl.ir import SSAValue
+
+        # Build value mapping dictionary
+        value_mapping: dict[SSAValue, SSAValue] = {
+            old_block.args[0]: new_block.args[0]
+        }
+
+        acc_loaded = False
+
+        for inner_op in list(old_block.ops):
+            uses_iter_arg = False
+            if iter_arg:
+                for operand in inner_op.operands:
+                    if operand == iter_arg:
+                        uses_iter_arg = True
+                        break
+
+            # Load accumulator if needed - use the emitc_inner_ty for result
+            if uses_iter_arg and not acc_loaded:
+                load_op = EmitCLoadOp(src=emitc_var.results[0], result_type=emitc_inner_ty)
+                new_block.add_op(load_op)
+                value_mapping[cast(SSAValue, iter_arg)] = load_op.results[0]
+                acc_loaded = True
+
+            new_op = inner_op.clone(value_mapping)
+            new_block.add_op(new_op)
+
+            for old_res, new_res in zip(inner_op.results, new_op.results):
+                value_mapping[old_res] = new_res
+
+        emitc_yield = EmitCYieldOp.create(operands=[], result_types=[])
+        new_block.add_op(emitc_yield)
+
+        new_region = Region()
+        new_region.add_block(new_block)
+
+        emitc_for = EmitCForOp.create(
+            operands=[lb, ub, step],
+            result_types=[],
+            regions=[new_region],
+        )
+
+        # Final load also uses emitc_inner_ty
+        final_load = EmitCLoadOp(src=emitc_var.results[0], result_type=emitc_inner_ty)
+        rewriter.replace_op(
+            op, [emitc_for, final_load], new_results=[final_load.results[0]]
+        )
+
+
+class SCFToEmitCPass(ModulePass):
+    name = "convert-scf-to-emitc"
+
+    def apply(self, ctx: Context, op: ModuleOp) -> None:
+        PatternRewriteWalker(
+            ConvertScfForToEmitCFor(),
+            apply_recursively=True,
+        ).rewrite_module(op)

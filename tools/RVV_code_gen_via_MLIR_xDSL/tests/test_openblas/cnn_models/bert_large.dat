@@ -1,0 +1,6 @@
+#layer	m	n	k	Flops
+    BERT_large_enc_M123	1024	384	1024	805 306 368
+    BERT_large_enc_M5	384	384	64	18 874 368
+    BERT_large_enc_M7	64	384	384	18 874 368
+    BERT_large_enc_F11	4096	384	1024	3 221 225 472
+    BERT_large_enc_F13	1024	384	4096	3 221 225 472

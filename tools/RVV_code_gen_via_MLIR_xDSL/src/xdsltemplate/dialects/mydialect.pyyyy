@@ -1,0 +1,26 @@
+from xdsl.ir import Dialect, ParametrizedAttribute
+from xdsl.irdl import irdl_attr_definition
+from xdsl.parser import Parser
+from xdsl.printer import Printer
+
+
+@irdl_attr_definition
+class MyCustomType(ParametrizedAttribute):
+    """A simple custom type"""
+
+    name = "mydialect.mytype"
+
+    def print(self, printer: Printer):
+        printer.print_string("mytype")
+
+    @classmethod
+    def parse(cls, parser: Parser):
+        return cls([])
+
+
+# Create the dialect
+MyDialect = Dialect(
+    "mydialect",
+    [],  # operations list (empty for now)
+    [MyCustomType],  # attributes/types list
+)

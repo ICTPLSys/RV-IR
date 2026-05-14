@@ -1,0 +1,171 @@
+# xdsltemplate/transforms/scf_to_emitc.py
+from xdsl.context import Context
+from xdsl.dialects import arith, builtin, emitc, scf
+from xdsl.dialects.builtin import Float32Type, FloatAttr, ModuleOp
+from xdsl.irdl import IRDLOperation, irdl_op_definition, result_def
+from xdsl.passes import ModulePass
+from xdsl.pattern_rewriter import (
+    PatternRewriter,
+    PatternRewriteWalker,
+    RewritePattern,
+    op_type_rewrite_pattern,
+)
+
+from xdsltemplate.dialects.emitc_ext import EmitCLoadOp
+
+
+@irdl_op_definition
+class EmitCVariableOp(IRDLOperation):
+    name = "emitc.variable"
+    res = result_def(emitc.EmitC_LValueType)
+
+
+@irdl_op_definition
+class EmitCAssignOp(IRDLOperation):
+    name = "emitc.assign"
+
+
+@irdl_op_definition
+class EmitCForOp(IRDLOperation):
+    name = "emitc.for"
+
+
+@irdl_op_definition
+class EmitCYieldOp(IRDLOperation):
+    name = "emitc.yield"
+
+
+
+class ConvertScfForToEmitCFor(RewritePattern):
+    """
+    Convert scf.for with iter_args into emitc.for + emitc.variable/assign structure.
+    """
+
+    @op_type_rewrite_pattern
+    def match_and_rewrite(self, op: scf.ForOp, rewriter: PatternRewriter):
+        # handle only single accumulator
+        if len(op.iter_args) != 1:
+            return
+
+        init_acc = op.iter_args[0]
+        acc_ty = init_acc.type
+
+        op_def = init_acc.owner if hasattr(init_acc, "owner") else None
+        if isinstance(op_def, arith.ConstantOp):
+            value_attr = op_def.value
+            # return
+        else:
+            # value_attr = FloatAttr(0.0, acc_ty)
+            value_attr = FloatAttr(0.0, Float32Type())
+
+
+
+
+        # %tmp_acc = "emitc.variable"() {name = "tmp_acc", type = f32, value = 0.0 : f32}
+        # : () -> !emitc.lvalue<f32>
+        emitc_var = EmitCVariableOp.create(
+            operands=[],
+            # result_types=[emitc.EmitC_LValueType(acc_ty)],
+            result_types=[acc_ty],
+            attributes={
+                "name": builtin.StringAttr("tmp_acc"),
+                "type": acc_ty,
+                "value": value_attr,
+            },
+        )
+        rewriter.insert_op_before_matched_op(emitc_var)
+
+        # here we replace the scf.yield with emitc.assign
+        for inner_op in op.body.ops:
+            if isinstance(inner_op, scf.YieldOp):
+                emitc_assign = EmitCAssignOp.create(
+                    operands=[emitc_var.results[0], inner_op.operands[0]],
+                    result_types=[],
+                )
+                rewriter.replace_op(inner_op, [emitc_assign])
+
+        # here we rewrite scf.for to emitc.for
+        lb, ub, step = op.lb, op.ub, op.step
+
+        # Create a NEW region with a block that has only the induction variable
+        from xdsl.ir import Block, Region
+
+        old_block = op.body.blocks[0]
+        iter_arg = old_block.args[1] if len(old_block.args) == 2 else None
+
+        # Create new block with only induction variable
+        new_block = Block(arg_types=[old_block.args[0].type])
+        new_block.args[0].name_hint = old_block.args[0].name_hint
+
+        # Add these imports at the top if not already there
+        from typing import cast
+
+        from xdsl.ir import SSAValue
+
+        # ... then in your match_and_rewrite method, replace the
+        # "Move operations and fix references" section with:
+
+        # Build value mapping dictionary
+        value_mapping: dict[SSAValue, SSAValue] = {
+            old_block.args[0]: new_block.args[0]  # Map loop iterator
+        }
+
+        # Track if we've loaded the accumulator
+        acc_loaded = False
+
+        # Process operations from old block (DON'T detach!)
+        for inner_op in list(old_block.ops):
+            # Skip yield and assign (yield was already replaced)
+            # if isinstance(inner_op, (scf.YieldOp, EmitCAssignOp)):
+            # continue
+
+            # Check if op uses iter_arg
+            uses_iter_arg = False
+            if iter_arg:
+                for operand in inner_op.operands:
+                    if operand == iter_arg:
+                        uses_iter_arg = True
+                        break
+
+            # Load accumulator if needed
+            if uses_iter_arg and not acc_loaded:
+                load_op = EmitCLoadOp(src=emitc_var.results[0], result_type=acc_ty)
+                new_block.add_op(load_op)
+                value_mapping[cast(SSAValue, iter_arg)] = load_op.results[0]
+                acc_loaded = True
+
+            # Clone with mapping - THE KEY!
+            new_op = inner_op.clone(value_mapping)
+            new_block.add_op(new_op)
+
+            # Update mapping
+            for old_res, new_res in zip(inner_op.results, new_op.results):
+                value_mapping[old_res] = new_res
+
+        emitc_yield = EmitCYieldOp.create(operands=[], result_types=[])
+        new_block.add_op(emitc_yield)
+
+        # Create NEW region with the new block
+        new_region = Region()
+        new_region.add_block(new_block)
+
+        emitc_for = EmitCForOp.create(
+            operands=[lb, ub, step],
+            result_types=[],
+            regions=[new_region],
+        )
+        final_load = EmitCLoadOp(src=emitc_var.results[0], result_type=acc_ty)
+        rewriter.replace_op(
+            op, [emitc_for, final_load], new_results=[final_load.results[0]]
+        )
+
+
+class SCFToEmitCPass(ModulePass):
+    name = "convert-scf-to-emitc"
+
+    def apply(self, ctx: Context, op: ModuleOp) -> None:
+        PatternRewriteWalker(
+            ConvertScfForToEmitCFor(),
+            # apply_recursively=False,
+            apply_recursively=True,
+        ).rewrite_module(op)
