@@ -1,5 +1,6 @@
 //RUN: torch-mlir-opt <%s -convert-linalg-to-rocc | FileCheck %s
-// CHECK: llvm.func @main()
+// CHECK: func.func @forward
+// CHECK: rocc.matmul
 #map = affine_map<(d0, d1) -> (d0, d1)>
 #map1 = affine_map<(d0, d1) -> (d0, d1)>
 module attributes {torch.debug_module_name = "MatmulOnly"} {

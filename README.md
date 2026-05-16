@@ -91,8 +91,12 @@ pip install --pre torch-mlir torchvision \
         cmake -GNinja -B build \
           -DCMAKE_BUILD_TYPE=RelWithDebInfo \
           -DLLVM_ENABLE_ASSERTIONS=ON \
+          -DPython3_EXECUTABLE=/home/jianzexin/miniconda3/envs/torch-mlir/bin/python3 \
+          -DPython_EXECUTABLE=/home/jianzexin/miniconda3/envs/torch-mlir/bin/python3 \
           -DPython3_FIND_VIRTUALENV=ONLY \
           -DPython_FIND_VIRTUALENV=ONLY \
+          -DPython3_FIND_STRATEGY=LOCATION \
+          -DPython_FIND_STRATEGY=LOCATION \
           -DMLIR_ENABLE_BINDINGS_PYTHON=ON \
           -DLLVM_EXPERIMENTAL_TARGETS_TO_BUILD="RISCV"\
           -DLLVM_TARGETS_TO_BUILD=host \
