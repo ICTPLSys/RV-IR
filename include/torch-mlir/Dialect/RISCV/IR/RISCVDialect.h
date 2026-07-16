@@ -33,26 +33,32 @@
 
 using namespace mlir;
 
-namespace rocc {
+namespace rair {
 class AsyncTokenType
     : public Type::TypeBase<AsyncTokenType, Type, TypeStorage> {
 public:
   // Used for generic hooks in TypeBase.
   using Base::Base;
-  static constexpr StringLiteral name = "rocc.async_token";
+  static constexpr StringLiteral name = "rair.async_token";
 };
 
 class EventType : public Type::TypeBase<EventType, Type, TypeStorage> {
 public:
   using Base::Base;
-  static constexpr StringLiteral name = "rocc.event";
+  static constexpr StringLiteral name = "rair.event";
+};
+
+class ContextType : public Type::TypeBase<ContextType, Type, TypeStorage> {
+public:
+  using Base::Base;
+  static constexpr StringLiteral name = "rair.context";
 };
 
 }
 //===----------------------------------------------------------------------===//
 // AsyncOpInterface
 //===----------------------------------------------------------------------===//
-namespace rocc{
+namespace rair{
 static ParseResult parseAsyncDependencies(
     OpAsmParser &parser, Type &asyncTokenType,
     SmallVectorImpl<OpAsmParser::UnresolvedOperand> &asyncDependencies) {
@@ -60,7 +66,7 @@ static ParseResult parseAsyncDependencies(
   if (succeeded(parser.parseOptionalKeyword("async"))) {
     if (parser.getNumResults() == 0)
       return parser.emitError(loc, "needs to be named when marked 'async'");
-    asyncTokenType = parser.getBuilder().getType<rocc::AsyncTokenType>();
+    asyncTokenType = parser.getBuilder().getType<rair::AsyncTokenType>();
   }
   return parser.parseOperandList(asyncDependencies,
                                  OpAsmParser::Delimiter::OptionalSquare);
@@ -120,17 +126,17 @@ static void printAsyncDependencies(OpAsmPrinter &printer, Operation *op,
 |*                                                                            *|
 \*===----------------------------------------------------------------------===*/
 
-// namespace rocc {
+// namespace rair {
 
-// class ROCCDialect : public ::mlir::Dialect {
-//   explicit ROCCDialect(::mlir::MLIRContext *context);
+// class RAIRDialect : public ::mlir::Dialect {
+//   explicit RAIRDialect(::mlir::MLIRContext *context);
 
 //   void initialize();
 //   friend class ::mlir::MLIRContext;
 // public:
-//   ~ROCCDialect() override;
+//   ~RAIRDialect() override;
 //   static constexpr ::llvm::StringLiteral getDialectNamespace() {
-//     return ::llvm::StringLiteral("rocc");
+//     return ::llvm::StringLiteral("rair");
 //   }
 
 //   /// Materialize a single constant operation from a given attribute value with
@@ -140,5 +146,5 @@ static void printAsyncDependencies(OpAsmPrinter &printer, Operation *op,
 //                                          ::mlir::Type type,
 //                                          ::mlir::Location loc) override;
 // };
-// } // namespace rocc
-// MLIR_DECLARE_EXPLICIT_TYPE_ID(::rocc::ROCCDialect)
+// } // namespace rair
+// MLIR_DECLARE_EXPLICIT_TYPE_ID(::rair::RAIRDialect)

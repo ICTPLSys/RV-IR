@@ -3,7 +3,7 @@
 ###############################################################################
 # RISCV MLIR to C Conversion Script
 #
-# This script converts MLIR files containing rocc.batch_matmul operations
+# This script converts MLIR files containing rair.batch_matmul operations
 # to C code using the xDSL framework and mlir-translate.
 #
 # Usage:
@@ -47,7 +47,7 @@ while [[ $# -gt 0 ]]; do
             echo "  -h, --help             Show this help message"
             echo ""
             echo "Arguments:"
-            echo "  input.mlir             Input MLIR file containing rocc.batch_matmul"
+            echo "  input.mlir             Input MLIR file containing rair.batch_matmul"
             echo "  output.cpp             Output C++ file (default: input.cpp)"
             echo ""
             echo "Available strategies:"
@@ -117,7 +117,7 @@ fi
 
 # Print header
 if [ $VERBOSE -eq 1 ]; then
-    echo -e "${BLUE}[INFO]${NC} RoCC MLIR to C Code Generation Pipeline"
+    echo -e "${BLUE}[INFO]${NC} RAIR MLIR to C Code Generation Pipeline"
     echo "=================================================="
     echo -e "Input file:     ${INPUT_FILE}"
     echo -e "Output file:    ${OUTPUT_FILE}"
@@ -135,11 +135,11 @@ if [ ! -f "$PYTHON_SCRIPT" ]; then
 fi
 
 INPUT_FILE_FOR_PROCESSING="$INPUT_FILE"
-# Check if input file uses custom RoCC dialect format
-if grep -q -E "rocc\.(batch_matmul|transpose).*ins\(" "$INPUT_FILE" 2>/dev/null; then
+# Check if input file uses custom RAIR dialect format
+if grep -q -E "rair\.(batch_matmul|transpose).*ins\(" "$INPUT_FILE" 2>/dev/null; then
     if [ -f "$CONVERT_FORMAT_SCRIPT" ]; then
         if [ $VERBOSE -eq 1 ]; then
-            echo -e "${BLUE}[INFO]${NC} Converting custom RoCC format to generic format..."
+            echo -e "${BLUE}[INFO]${NC} Converting custom RAIR format to generic format..."
         fi
         TEMP_CONVERTED="${TMPDIR:-/tmp}/riscv_mlir_converted_$$$.mlir"
         # Run Python directly without activating venv here

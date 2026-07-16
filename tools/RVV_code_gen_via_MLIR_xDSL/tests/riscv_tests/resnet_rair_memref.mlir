@@ -68,7 +68,7 @@ module attributes {torch.debug_module_name = "ResNetSimple"} {
     linalg.fill ins(%cst_1 : f32) outs(%alloc_17 : memref<1x4xf32>)
     %alloc_18 = memref.alloc() {alignment = 64 : i64} : memref<1x4xf32>
     memref.copy %alloc_17, %alloc_18 : memref<1x4xf32> to memref<1x4xf32>
-    rocc.matmul ins(%collapse_shape, %alloc_7 : memref<1x4xf32>, memref<4x4xf32>) outs(%alloc_18 : memref<1x4xf32>)
+    rair.matmul ins(%collapse_shape, %alloc_7 : memref<1x4xf32>, memref<4x4xf32>) outs(%alloc_18 : memref<1x4xf32>)
     %alloc_19 = memref.alloc() {alignment = 64 : i64} : memref<1x4xf32>
     linalg.generic {indexing_maps = [#map2, #map3, #map2], iterator_types = ["parallel", "parallel"]} ins(%alloc_18, %alloc_6 : memref<1x4xf32>, memref<4xf32>) outs(%alloc_19 : memref<1x4xf32>) {
     ^bb0(%in: f32, %in_20: f32, %out: f32):

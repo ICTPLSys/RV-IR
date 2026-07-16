@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# PyTorch example -> Linalg(memref) -> ROCC MLIR -> EmitC-style C++ (xDSL).
+# PyTorch example -> Linalg(memref) -> RAIR MLIR -> EmitC-style C++ (xDSL).
 # Supports MnistNet and tiny ResNet (resnet_simple_to_linalg.py).
 #
 # Prerequisites:
@@ -10,9 +10,9 @@
 # Usage:
 #   conda activate torch-mlir
 #   cd /path/to/RV-IR
-#   bash scripts/mnist_torch_linalg_rocc_to_cpp.sh --model mnist
-#   bash scripts/mnist_torch_linalg_rocc_to_cpp.sh resnet --wd 16 --type fp
-#   bash scripts/mnist_torch_linalg_rocc_to_cpp.sh --model resnet --spatial 5 --pad 3
+#   bash scripts/mnist_torch_linalg_rair_to_cpp.sh --model mnist
+#   bash scripts/mnist_torch_linalg_rair_to_cpp.sh resnet --wd 16 --type fp
+#   bash scripts/mnist_torch_linalg_rair_to_cpp.sh --model resnet --spatial 5 --pad 3
 #
 set -euo pipefail
 
@@ -40,9 +40,9 @@ RESNET_NO_VERIFY=0
 
 usage() {
   cat <<'EOF'
-Usage: bash scripts/mnist_torch_linalg_rocc_to_cpp.sh [mnist|resnet] [options]
+Usage: bash scripts/mnist_torch_linalg_rair_to_cpp.sh [mnist|resnet] [options]
 
-PyTorch export -> Linalg(memref) -> ROCC MLIR -> C++ under tools/RVV_code_gen_via_MLIR_xDSL/generated/
+PyTorch export -> Linalg(memref) -> RAIR MLIR -> C++ under tools/RVV_code_gen_via_MLIR_xDSL/generated/
 
 Model selection (pick one):
   mnist|resnet              Optional first positional argument (same as --model).
@@ -65,8 +65,8 @@ ResNet-only (passed to resnet_simple_to_linalg.py when --model resnet):
   --no-verify               Skip MLIR geometry self-check in the Python exporter.
 
 Output layout (under projects/pt1/examples/mlir_output/):
-  mnist:  mnist_linalg_memref.mlir  -> mnist_rocc_memref.mlir
-  resnet: resnet_simple_memref.mlir -> resnet_simple_rocc_memref.mlir
+  mnist:  mnist_linalg_memref.mlir  -> mnist_rair_memref.mlir
+  resnet: resnet_simple_memref.mlir -> resnet_simple_rair_memref.mlir
 EOF
   exit 0
 }
@@ -162,12 +162,12 @@ die() {
 if [[ "$MODEL" == "mnist" ]]; then
   EXPORT_SCRIPT="mnistnet_to_linalg.py"
   LINALG_MLIR="${MLIR_OUT_DIR}/mnist_linalg_memref.mlir"
-  ROCC_MLIR="${MLIR_OUT_DIR}/mnist_rocc_memref.mlir"
+  RAIR_MLIR="${MLIR_OUT_DIR}/mnist_rair_memref.mlir"
   [[ -f "${EXAMPLES_DIR}/mnistnet_to_linalg.py" ]] || die "Missing ${EXAMPLES_DIR}/mnistnet_to_linalg.py"
 else
   EXPORT_SCRIPT="resnet_simple_to_linalg.py"
   LINALG_MLIR="${MLIR_OUT_DIR}/resnet_simple_memref.mlir"
-  ROCC_MLIR="${MLIR_OUT_DIR}/resnet_simple_rocc_memref.mlir"
+  RAIR_MLIR="${MLIR_OUT_DIR}/resnet_simple_rair_memref.mlir"
   [[ -f "${EXAMPLES_DIR}/resnet_simple_to_linalg.py" ]] || die "Missing ${EXAMPLES_DIR}/resnet_simple_to_linalg.py"
 fi
 
@@ -192,22 +192,22 @@ echo "== Step 1/3: (${MODEL}) ${EXPORT_SCRIPT} -> ${LINALG_MLIR}"
   fi
 )
 
-echo "== Step 2/3: Linalg -> ROCC -> ${ROCC_MLIR}"
-"$TORCH_MLIR_OPT" "$LINALG_MLIR" --convert-linalg-to-rocc -o "$ROCC_MLIR"
+echo "== Step 2/3: Linalg -> RAIR -> ${RAIR_MLIR}"
+"$TORCH_MLIR_OPT" "$LINALG_MLIR" --convert-linalg-to-rair -o "$RAIR_MLIR"
 
-echo "== Step 3/3: ROCC MLIR -> C++ under tools/RVV_code_gen_via_MLIR_xDSL/generated/"
-ROCC_ABS="$(cd "$(dirname "$ROCC_MLIR")" && pwd)/$(basename "$ROCC_MLIR")"
+echo "== Step 3/3: RAIR MLIR -> C++ under tools/RVV_code_gen_via_MLIR_xDSL/generated/"
+RAIR_ABS="$(cd "$(dirname "$RAIR_MLIR")" && pwd)/$(basename "$RAIR_MLIR")"
 (
   cd "$TOOLS_RVV"
   if [[ "$VERBOSE" -eq 1 ]]; then
-    ./convert_linalg_mlir_to_c.sh -v "$ROCC_ABS" --wd "$WD" --type "$TYPE"
+    ./convert_linalg_mlir_to_c.sh -v "$RAIR_ABS" --wd "$WD" --type "$TYPE"
   else
-    ./convert_linalg_mlir_to_c.sh "$ROCC_ABS" --wd "$WD" --type "$TYPE"
+    ./convert_linalg_mlir_to_c.sh "$RAIR_ABS" --wd "$WD" --type "$TYPE"
   fi
 )
 
-OUT_CPP="${TOOLS_RVV}/generated/$(basename "${ROCC_MLIR%.mlir}.cpp")"
+OUT_CPP="${TOOLS_RVV}/generated/$(basename "${RAIR_MLIR%.mlir}.cpp")"
 echo "Done (model=${MODEL})."
 echo "  Linalg MLIR:   $LINALG_MLIR"
-echo "  ROCC MLIR:     $ROCC_MLIR"
+echo "  RAIR MLIR:     $RAIR_MLIR"
 echo "  Generated C++: $OUT_CPP"

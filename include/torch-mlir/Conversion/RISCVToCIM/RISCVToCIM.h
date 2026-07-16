@@ -5,5 +5,5 @@
 
 namespace cim {
 
-std::unique_ptr<mlir::OperationPass<mlir::func::FuncOp>> createROCCLowerToCIMPass();
+std::unique_ptr<mlir::OperationPass<mlir::func::FuncOp>> createRAIRLowerToCIMPass();
 } // namespace cim

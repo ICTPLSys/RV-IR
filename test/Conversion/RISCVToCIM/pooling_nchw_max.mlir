@@ -1,4 +1,4 @@
-// RUN: torch-mlir-opt <%s --convert-rocc-to-cim | FileCheck %s
+// RUN: torch-mlir-opt <%s --convert-rair-to-cim | FileCheck %s
 
 // CHECK: call @llvm.riscv.v.s.drv(%{{.*}}) : (i32) -> i32    
 // CHECK: call @llvm.riscv.vv.v.drv(%{{.*}}, %{{.*}}) : (i32, i32) -> i32 
@@ -12,7 +12,7 @@ module attributes {torch.debug_module_name = "PoolingNCHWMax"} {
 
     %kernel = memref.get_global @__constant_3x3xf32 : memref<3x3xf32>
     %output = memref.alloc() {alignment = 64 : i64} : memref<1x64x56x56xf32>
-    rocc.pooling_nchw_max {dilations = dense<[1, 1]> : vector<2xi64>, strides = dense<[2, 2]> : vector<2xi64>}
+    rair.pooling_nchw_max {dilations = dense<[1, 1]> : vector<2xi64>, strides = dense<[2, 2]> : vector<2xi64>}
       ins(%input, %kernel : memref<1x64x114x114xf32>, memref<3x3xf32>)
       outs(%output : memref<1x64x56x56xf32>)
     return %output : memref<1x64x56x56xf32>

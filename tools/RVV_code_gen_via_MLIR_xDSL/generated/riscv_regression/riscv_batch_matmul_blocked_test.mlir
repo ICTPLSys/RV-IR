@@ -18,7 +18,7 @@
     %10 = "emitc.call_opaque"(%3, %5, %6, %4) <{callee = "create_tensor_C"}> : (!emitc.ptr<f32>, index, index, index) -> !emitc.opaque<"Tensor">
     %11 = "emitc_ext.constant"() {value = 0 : index} : () -> index
     "emitc.call_opaque"(%8, %9, %10, %10, %11, %11) <{callee = "gemm_operator"}> : (!emitc.opaque<"Tensor">, !emitc.opaque<"Tensor">, !emitc.opaque<"Tensor">, !emitc.opaque<"Tensor">, index, index) -> ()
-    "rocc.batch_matmul"(%arg0, %alloc, %alloc_1) : (!emitc.ptr<f32>, memref<1x2048x512xf32>, memref<1x128x512xf32>) -> ()
+    "rair.batch_matmul"(%arg0, %alloc, %alloc_1) : (!emitc.ptr<f32>, memref<1x2048x512xf32>, memref<1x128x512xf32>) -> ()
     "func.return"(%alloc_1) : (memref<1x128x512xf32>) -> ()
   }) : () -> ()
 }) {torch.debug_module_name = "LlamaDecoderBlock"} : () -> ()

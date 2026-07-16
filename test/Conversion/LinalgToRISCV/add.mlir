@@ -1,6 +1,6 @@
 
-// RUN: torch-mlir-opt <%s -convert-linalg-to-rocc | FileCheck %s
-// CHECK: rocc.add
+// RUN: torch-mlir-opt <%s -convert-linalg-to-rair | FileCheck %s
+// CHECK: rair.add
 func.func @main() {
     // Create input matrices
     %A = arith.constant dense<[[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]> : tensor<2x3xf64>
@@ -14,9 +14,9 @@ func.func @main() {
                        outs(%C_init : tensor<2x3xf64>) -> tensor<2x3xf64>
     
     // Print results
-    "rocc.print"(%A) : (tensor<2x3xf64>) -> ()
-    "rocc.print"(%B) : (tensor<2x3xf64>) -> ()
-    "rocc.print"(%C) : (tensor<2x3xf64>) -> ()
+    "rair.print"(%A) : (tensor<2x3xf64>) -> ()
+    "rair.print"(%B) : (tensor<2x3xf64>) -> ()
+    "rair.print"(%C) : (tensor<2x3xf64>) -> ()
     
     return
 }

@@ -772,6 +772,751 @@ class BlockedGEMMStrategy(GEMMStrategy):
         emitter.emit("return (void *)tensor_C.base_addr;")
 
 
+class GemminiStrategy(GEMMStrategy):
+    """Gemmini accelerator strategy: generates complete standalone C programs
+    using Berkeley Gemmini low-level ISA (mvin/compute/mvout).
+
+    The generated code is a self-contained baremetal program that can be
+    compiled and run with ``spike --extension=gemmini``.
+    """
+
+    GEMMINI_DIM = 16
+    ADDR_LEN = 32
+    BANK_NUM = 4
+    BANK_ROWS = 4096
+
+    def __init__(self):
+        super().__init__("gemmini")
+
+    @property
+    def is_standalone_program(self) -> bool:
+        return True
+
+    def generate_prologue(self, emitter, tensors):
+        pass
+
+    def generate_tensor_init(self, emitter, tensor):
+        pass
+
+    def generate_computation(self, emitter, tensors, accumulate, activate):
+        pass
+
+    def generate_epilogue(self, emitter, tensors):
+        pass
+
+    def generate_full_program(
+        self,
+        tensors: dict[str, "TensorDescriptor"],
+        func_name: str | None = None,
+    ) -> str:
+        DIM = self.GEMMINI_DIM
+        emitter = CodeEmitter()
+
+        M = tensors["A"].dim1 if "A" in tensors else DIM
+        K = tensors["A"].dim0 if "A" in tensors else DIM
+        N = tensors["B"].dim0 if "B" in tensors else DIM
+
+        emitter.emit("// Auto-generated Gemmini baremetal program from RAIR MLIR")
+        emitter.emit(f"// matmul: C[{M}x{N}] = A[{M}x{K}] * B[{K}x{N}]")
+        emitter.emit("")
+        emitter.emit("#include <stdint.h>")
+        emitter.emit("#include <stddef.h>")
+        emitter.emit("#include <stdlib.h>")
+        emitter.emit("#include <stdio.h>")
+        emitter.emit("#ifndef BAREMETAL")
+        emitter.emit("#include <sys/mman.h>")
+        emitter.emit("#endif")
+        emitter.emit('#include "include/gemmini_testutils.h"')
+        emitter.emit("")
+        emitter.emit(f"#define MAT_DIM_I {M}")
+        emitter.emit(f"#define MAT_DIM_K {K}")
+        emitter.emit(f"#define MAT_DIM_J {N}")
+        emitter.emit("")
+
+        emitter.emit("static elem_t A[MAT_DIM_I][MAT_DIM_K] row_align(1);")
+        emitter.emit("static elem_t B[MAT_DIM_K][MAT_DIM_J] row_align(1);")
+        emitter.emit("static elem_t C[MAT_DIM_I][MAT_DIM_J] row_align(1);")
+        emitter.emit("static elem_t C_gold[MAT_DIM_I][MAT_DIM_J];")
+        emitter.emit("")
+
+        self._emit_helper_functions(emitter)
+
+        emitter.emit("int main(void) {")
+        emitter.indent()
+
+        emitter.emit("#ifndef BAREMETAL")
+        emitter.emit("if (mlockall(MCL_CURRENT | MCL_FUTURE) != 0) {")
+        emitter.indent()
+        emitter.emit('perror("mlockall failed");')
+        emitter.emit("exit(1);")
+        emitter.dedent()
+        emitter.emit("}")
+        emitter.emit("#endif")
+        emitter.emit("")
+
+        emitter.emit('printf("Gemmini matmul: C[%d,%d] = A[%d,%d] * B[%d,%d]\\n",')
+        emitter.emit("    MAT_DIM_I, MAT_DIM_J, MAT_DIM_I, MAT_DIM_K, MAT_DIM_K, MAT_DIM_J);")
+        emitter.emit("")
+
+        self._emit_init_matrices(emitter)
+        self._emit_cpu_reference(emitter)
+
+        emitter.emit("gemmini_flush(0);")
+        emitter.emit("")
+        emitter.emit("uint64_t start = read_cycles();")
+        emitter.emit("")
+
+        if M <= DIM and K <= DIM and N <= DIM:
+            self._emit_single_tile_matmul(emitter, M, K, N)
+        else:
+            self._emit_tiled_matmul(emitter, M, K, N)
+
+        emitter.emit("gemmini_fence();")
+        emitter.emit("")
+        emitter.emit("uint64_t end = read_cycles();")
+        emitter.emit('printf("Gemmini matmul took %llu cycles\\n", end - start);')
+        emitter.emit("")
+
+        self._emit_verification(emitter)
+
+        emitter.dedent()
+        emitter.emit("}")
+        emitter.emit("")
+
+        return emitter.get_code()
+
+    def _emit_helper_functions(self, emitter: CodeEmitter) -> None:
+        emitter.emit("static elem_t saturate(full_t x) {")
+        emitter.indent()
+        emitter.emit("#ifndef ELEM_T_IS_FLOAT")
+        emitter.emit("if (x > elem_t_max) return elem_t_max;")
+        emitter.emit("if (x < elem_t_min) return elem_t_min;")
+        emitter.emit("#endif")
+        emitter.emit("return (elem_t)x;")
+        emitter.dedent()
+        emitter.emit("}")
+        emitter.emit("")
+
+    def _emit_init_matrices(self, emitter: CodeEmitter) -> None:
+        emitter.emit("for (size_t i = 0; i < MAT_DIM_I; i++)")
+        emitter.indent()
+        emitter.emit("for (size_t k = 0; k < MAT_DIM_K; k++)")
+        emitter.indent()
+        emitter.emit("A[i][k] = (elem_t)((i + 2 * k) % 5 - 2);")
+        emitter.dedent()
+        emitter.dedent()
+        emitter.emit("")
+
+        emitter.emit("for (size_t k = 0; k < MAT_DIM_K; k++)")
+        emitter.indent()
+        emitter.emit("for (size_t j = 0; j < MAT_DIM_J; j++)")
+        emitter.indent()
+        emitter.emit("B[k][j] = (elem_t)((3 * k + j) % 7 - 3);")
+        emitter.dedent()
+        emitter.dedent()
+        emitter.emit("")
+
+        emitter.emit("for (size_t i = 0; i < MAT_DIM_I; i++)")
+        emitter.indent()
+        emitter.emit("for (size_t j = 0; j < MAT_DIM_J; j++)")
+        emitter.indent()
+        emitter.emit("C[i][j] = 0;")
+        emitter.dedent()
+        emitter.dedent()
+        emitter.emit("")
+
+    def _emit_cpu_reference(self, emitter: CodeEmitter) -> None:
+        emitter.emit("uint64_t cpu_start = read_cycles();")
+        emitter.emit("for (size_t i = 0; i < MAT_DIM_I; i++) {")
+        emitter.indent()
+        emitter.emit("for (size_t j = 0; j < MAT_DIM_J; j++) {")
+        emitter.indent()
+        emitter.emit("full_t sum = 0;")
+        emitter.emit("for (size_t k = 0; k < MAT_DIM_K; k++)")
+        emitter.indent()
+        emitter.emit("sum += (full_t)A[i][k] * (full_t)B[k][j];")
+        emitter.dedent()
+        emitter.emit("C_gold[i][j] = saturate(sum);")
+        emitter.dedent()
+        emitter.emit("}")
+        emitter.dedent()
+        emitter.emit("}")
+        emitter.emit("uint64_t cpu_end = read_cycles();")
+        emitter.emit('printf("CPU reference took %llu cycles\\n", cpu_end - cpu_start);')
+        emitter.emit("")
+
+    def _emit_single_tile_matmul(self, emitter: CodeEmitter, M: int, K: int, N: int) -> None:
+        """Emit code for a matmul where all dimensions fit in one DIM×DIM tile."""
+        DIM = self.GEMMINI_DIM
+        emitter.emit(f"// Single-tile matmul ({M}x{K} * {K}x{N}), fits in DIM={DIM}")
+        emitter.emit("")
+
+        emitter.emit("// Scratchpad addresses")
+        emitter.emit("size_t A_sp_addr = 0;")
+        emitter.emit("size_t B_sp_addr = DIM;")
+        emitter.emit("size_t C_sp_addr = 2 * DIM;")
+        emitter.emit("")
+
+        emitter.emit("// Configure load stride and move A, B into scratchpad")
+        emitter.emit("gemmini_config_ld(MAT_DIM_K * sizeof(elem_t));")
+        emitter.emit("gemmini_mvin(A, A_sp_addr);")
+        emitter.emit("")
+        emitter.emit("gemmini_config_ld(MAT_DIM_J * sizeof(elem_t));")
+        emitter.emit("gemmini_mvin(B, B_sp_addr);")
+        emitter.emit("")
+
+        emitter.emit("// Configure execution: output-stationary, no activation, no shift")
+        emitter.emit("gemmini_config_ex(OUTPUT_STATIONARY, 0, 0);")
+        emitter.emit("")
+
+        emitter.emit("// Preload zeros (no bias) and compute C = A * B")
+        emitter.emit("gemmini_preload_zeros(C_sp_addr);")
+        emitter.emit("gemmini_compute_preloaded(A_sp_addr, B_sp_addr);")
+        emitter.emit("")
+
+        emitter.emit("// Move result from scratchpad to main memory")
+        emitter.emit("gemmini_config_st(MAT_DIM_J * sizeof(elem_t));")
+        emitter.emit("gemmini_mvout(C, C_sp_addr);")
+        emitter.emit("")
+
+    def _emit_tiled_matmul(self, emitter: CodeEmitter, M: int, K: int, N: int) -> None:
+        """Emit code for a matmul with tiling over DIM-sized blocks.
+
+        Follows the official ``sp_tiled_matmul_os`` pattern from gemmini.h:
+        all A/B tiles are loaded into scratchpad upfront (A from the bottom,
+        B from the top), then compute iterates over tile indices referencing
+        the pre-loaded addresses.  Results accumulate in the accumulator
+        address space and are moved out at the end.
+        """
+        DIM = self.GEMMINI_DIM
+        ADDR_LEN = self.ADDR_LEN
+        BANK_NUM = self.BANK_NUM
+        BANK_ROWS = self.BANK_ROWS
+
+        I = (M + DIM - 1) // DIM
+        J = (N + DIM - 1) // DIM
+        K_tiles = (K + DIM - 1) // DIM
+
+        pad_I = I * DIM - M
+        pad_J = J * DIM - N
+        pad_K = K_tiles * DIM - K
+
+        emitter.emit(f"// Tiled matmul ({M}x{K} * {K}x{N}), DIM={DIM}")
+        emitter.emit(f"// Tile grid: I={I}, J={J}, K={K_tiles}  "
+                     f"(pad_I={pad_I}, pad_J={pad_J}, pad_K={pad_K})")
+        emitter.emit("// Following sp_tiled_matmul_os addressing: "
+                     "A from bottom, B from top of scratchpad")
+        emitter.emit("")
+
+        emitter.emit(f"const size_t I = {I};")
+        emitter.emit(f"const size_t J = {J};")
+        emitter.emit(f"const size_t K_tiles = {K_tiles};")
+        emitter.emit("")
+
+        emitter.emit("// Scratchpad address layout (matches sp_tiled_matmul_os)")
+        emitter.emit("const uint32_t A_sp_addr_start = 0;")
+        emitter.emit(f"const uint32_t B_sp_addr_start = "
+                     f"{BANK_NUM} * {BANK_ROWS} - K_tiles * J * DIM;")
+        emitter.emit(f"const uint32_t C_sp_addr_start = "
+                     f"(3u << ({ADDR_LEN} - 2));")
+        emitter.emit("")
+
+        emitter.emit("gemmini_config_ex(OUTPUT_STATIONARY, 0, 0);")
+        emitter.emit("")
+
+        # --- Move-in B ---
+        emitter.emit("// ---- Move-in B (all tiles) ----")
+        emitter.emit("gemmini_config_ld(MAT_DIM_J * sizeof(elem_t));")
+        emitter.emit("for (size_t k = 0; k < K_tiles; k++) {")
+        emitter.indent()
+        emitter.emit("for (size_t j = 0; j < J; j++) {")
+        emitter.indent()
+        emitter.emit("const uint32_t B_sp_addr = B_sp_addr_start + (k * J + j) * DIM;")
+        emitter.emit(f"size_t cols = DIM - (j == J - 1 ? {pad_J} : 0);")
+        emitter.emit(f"size_t rows = DIM - (k == K_tiles - 1 ? {pad_K} : 0);")
+        emitter.emit("gemmini_extended_mvin(&B[k * DIM][j * DIM], B_sp_addr, cols, rows);")
+        emitter.dedent()
+        emitter.emit("}")
+        emitter.dedent()
+        emitter.emit("}")
+        emitter.emit("")
+
+        # --- Move-in A ---
+        emitter.emit("// ---- Move-in A (all tiles) ----")
+        emitter.emit("gemmini_config_ld(MAT_DIM_K * sizeof(elem_t));")
+        emitter.emit("for (size_t i = 0; i < I; i++) {")
+        emitter.indent()
+        emitter.emit("for (size_t k = 0; k < K_tiles; k++) {")
+        emitter.indent()
+        emitter.emit("const uint32_t A_sp_addr = A_sp_addr_start + (i * K_tiles + k) * DIM;")
+        emitter.emit(f"size_t cols = DIM - (k == K_tiles - 1 ? {pad_K} : 0);")
+        emitter.emit(f"size_t rows = DIM - (i == I - 1 ? {pad_I} : 0);")
+        emitter.emit("gemmini_extended_mvin(&A[i * DIM][k * DIM], A_sp_addr, cols, rows);")
+        emitter.dedent()
+        emitter.emit("}")
+        emitter.dedent()
+        emitter.emit("}")
+        emitter.emit("")
+
+        # --- Compute ---
+        emitter.emit("// ---- Compute C = A * B (output-stationary) ----")
+        emitter.emit("for (size_t i = 0; i < I; i++) {")
+        emitter.indent()
+        emitter.emit("for (size_t j = 0; j < J; j++) {")
+        emitter.indent()
+        emitter.emit("const uint32_t C_sp_addr = C_sp_addr_start + (i * J + j) * DIM;")
+        emitter.emit("")
+        emitter.emit("for (size_t k = 0; k < K_tiles; k++) {")
+        emitter.indent()
+        emitter.emit("const uint32_t A_sp_addr = A_sp_addr_start + (i * K_tiles + k) * DIM;")
+        emitter.emit("const uint32_t B_sp_addr = B_sp_addr_start + (k * J + j) * DIM;")
+        emitter.emit("")
+
+        emitter.emit(f"size_t A_cols = DIM - (k == K_tiles - 1 ? {pad_K} : 0);")
+        emitter.emit(f"size_t A_rows = DIM - (i == I - 1 ? {pad_I} : 0);")
+        emitter.emit(f"size_t B_cols = DIM - (j == J - 1 ? {pad_J} : 0);")
+        emitter.emit(f"size_t B_rows = DIM - (k == K_tiles - 1 ? {pad_K} : 0);")
+        emitter.emit(f"size_t C_cols = DIM - (j == J - 1 ? {pad_J} : 0);")
+        emitter.emit(f"size_t C_rows = DIM - (i == I - 1 ? {pad_I} : 0);")
+        emitter.emit("")
+
+        emitter.emit("// Last k-tile outputs to C_sp_addr; others to GARBAGE_ADDR")
+        emitter.emit("uint32_t out_sp_addr = (k == K_tiles - 1) ? C_sp_addr : GARBAGE_ADDR;")
+        emitter.emit("")
+
+        emitter.emit("gemmini_extended_preload(GARBAGE_ADDR, out_sp_addr, "
+                     "DIM, DIM, C_cols, C_rows);")
+        emitter.emit("")
+
+        emitter.emit("if (k == 0) {")
+        emitter.indent()
+        emitter.emit("gemmini_extended_compute_preloaded(A_sp_addr, B_sp_addr, "
+                     "A_cols, A_rows, B_cols, B_rows);")
+        emitter.dedent()
+        emitter.emit("} else {")
+        emitter.indent()
+        emitter.emit("gemmini_extended_compute_accumulated(A_sp_addr, B_sp_addr, "
+                     "A_cols, A_rows, B_cols, B_rows);")
+        emitter.dedent()
+        emitter.emit("}")
+
+        emitter.dedent()
+        emitter.emit("}  // k")
+        emitter.dedent()
+        emitter.emit("}  // j")
+        emitter.dedent()
+        emitter.emit("}  // i")
+        emitter.emit("")
+
+        # --- Move-out C ---
+        emitter.emit("// ---- Move-out C (all tiles) ----")
+        emitter.emit("gemmini_config_st(MAT_DIM_J * sizeof(elem_t));")
+        emitter.emit("for (size_t i = 0; i < I; i++) {")
+        emitter.indent()
+        emitter.emit("for (size_t j = 0; j < J; j++) {")
+        emitter.indent()
+        emitter.emit("const uint32_t C_sp_addr = C_sp_addr_start + (i * J + j) * DIM;")
+        emitter.emit(f"size_t C_cols = DIM - (j == J - 1 ? {pad_J} : 0);")
+        emitter.emit(f"size_t C_rows = DIM - (i == I - 1 ? {pad_I} : 0);")
+        emitter.emit("gemmini_extended_mvout(&C[i * DIM][j * DIM], C_sp_addr, C_cols, C_rows);")
+        emitter.dedent()
+        emitter.emit("}")
+        emitter.dedent()
+        emitter.emit("}")
+        emitter.emit("")
+
+    def _emit_verification(self, emitter: CodeEmitter) -> None:
+        emitter.emit("int pass = 1;")
+        emitter.emit("for (size_t i = 0; i < MAT_DIM_I; i++) {")
+        emitter.indent()
+        emitter.emit("for (size_t j = 0; j < MAT_DIM_J; j++) {")
+        emitter.indent()
+        emitter.emit("if (C[i][j] != C_gold[i][j]) {")
+        emitter.indent()
+        emitter.emit('printf("MISMATCH at C[%u][%u]: got %d, expected %d\\n",')
+        emitter.emit("    (unsigned)i, (unsigned)j, C[i][j], C_gold[i][j]);")
+        emitter.emit("pass = 0;")
+        emitter.dedent()
+        emitter.emit("}")
+        emitter.dedent()
+        emitter.emit("}")
+        emitter.dedent()
+        emitter.emit("}")
+        emitter.emit("")
+        emitter.emit("if (pass) {")
+        emitter.indent()
+        emitter.emit('printf("PASSED\\n");')
+        emitter.emit("exit(0);")
+        emitter.dedent()
+        emitter.emit("} else {")
+        emitter.indent()
+        emitter.emit('printf("FAILED\\n");')
+        emitter.emit("exit(1);")
+        emitter.dedent()
+        emitter.emit("}")
+
+    def generate_full_program_auto(
+        self,
+        tensors: dict[str, "TensorDescriptor"],
+        func_name: str | None = None,
+    ) -> str:
+        """Generate a Gemmini program using the high-level ``tiled_matmul_auto`` API.
+
+        This produces simpler code than ``generate_full_program`` because Gemmini's
+        runtime handles all tiling, double-buffering, and scratchpad management
+        internally.  Works for arbitrary matrix sizes.
+        """
+        DIM = self.GEMMINI_DIM
+        emitter = CodeEmitter()
+
+        M = tensors["A"].dim1 if "A" in tensors else DIM
+        K = tensors["A"].dim0 if "A" in tensors else DIM
+        N = tensors["B"].dim0 if "B" in tensors else DIM
+
+        emitter.emit("// Auto-generated Gemmini program from RAIR MLIR (tiled_matmul_auto mode)")
+        emitter.emit(f"// matmul: C[{M}x{N}] = A[{M}x{K}] * B[{K}x{N}]")
+        emitter.emit("")
+        emitter.emit("#include <stdint.h>")
+        emitter.emit("#include <stddef.h>")
+        emitter.emit("#include <stdlib.h>")
+        emitter.emit("#include <stdio.h>")
+        emitter.emit("#ifndef BAREMETAL")
+        emitter.emit("#include <sys/mman.h>")
+        emitter.emit("#endif")
+        emitter.emit('#include "include/gemmini_testutils.h"')
+        emitter.emit("")
+        emitter.emit(f"#define MAT_DIM_I {M}")
+        emitter.emit(f"#define MAT_DIM_K {K}")
+        emitter.emit(f"#define MAT_DIM_J {N}")
+        emitter.emit("")
+
+        emitter.emit("static elem_t A[MAT_DIM_I][MAT_DIM_K] row_align(1);")
+        emitter.emit("static elem_t B[MAT_DIM_K][MAT_DIM_J] row_align(1);")
+        emitter.emit("static elem_t C[MAT_DIM_I][MAT_DIM_J] row_align(1);")
+        emitter.emit("static elem_t C_gold[MAT_DIM_I][MAT_DIM_J] row_align(1);")
+        emitter.emit("")
+
+        self._emit_helper_functions(emitter)
+
+        emitter.emit("int main(void) {")
+        emitter.indent()
+
+        emitter.emit("#ifndef BAREMETAL")
+        emitter.emit("if (mlockall(MCL_CURRENT | MCL_FUTURE) != 0) {")
+        emitter.indent()
+        emitter.emit('perror("mlockall failed");')
+        emitter.emit("exit(1);")
+        emitter.dedent()
+        emitter.emit("}")
+        emitter.emit("#endif")
+        emitter.emit("")
+
+        emitter.emit('printf("Gemmini matmul: C[%d,%d] = A[%d,%d] * B[%d,%d]\\n",')
+        emitter.emit("    MAT_DIM_I, MAT_DIM_J, MAT_DIM_I, MAT_DIM_K, MAT_DIM_K, MAT_DIM_J);")
+        emitter.emit("")
+
+        self._emit_init_matrices(emitter)
+        self._emit_cpu_reference(emitter)
+
+        emitter.emit("gemmini_flush(0);")
+        emitter.emit("")
+        emitter.emit("uint64_t start = read_cycles();")
+        emitter.emit("")
+
+        emitter.emit("tiled_matmul_auto(MAT_DIM_I, MAT_DIM_J, MAT_DIM_K,")
+        emitter.emit("    (elem_t*)A, (elem_t*)B, NULL, (elem_t*)C,")
+        emitter.emit("    MAT_DIM_K, MAT_DIM_J, MAT_DIM_J, MAT_DIM_J,")
+        emitter.emit("    MVIN_SCALE_IDENTITY, MVIN_SCALE_IDENTITY, MVIN_SCALE_IDENTITY,")
+        emitter.emit("    NO_ACTIVATION, ACC_SCALE_IDENTITY, 0, false,")
+        emitter.emit("    false, false,")
+        emitter.emit("    false, false,")
+        emitter.emit("    0,")
+        emitter.emit("    WS);")
+        emitter.emit("")
+
+        emitter.emit("gemmini_fence();")
+        emitter.emit("")
+        emitter.emit("uint64_t end = read_cycles();")
+        emitter.emit('printf("Gemmini matmul took %llu cycles\\n", end - start);')
+        emitter.emit("")
+
+        self._emit_verification(emitter)
+
+        emitter.dedent()
+        emitter.emit("}")
+        emitter.emit("")
+
+        return emitter.get_code()
+
+    def generate_multi_layer_program(
+        self,
+        layers: list[tuple[int, int, int]],
+        mode: str = "auto",
+    ) -> str:
+        """Generate a Gemmini program for a multi-layer MLP.
+
+        Each entry in *layers* is ``(M, K, N)`` for one matmul.  The output of
+        layer *i* is fed as the input of layer *i+1* (chain constraint:
+        ``layers[i] N == layers[i+1] K`` and rows match).
+        """
+        DIM = self.GEMMINI_DIM
+        emitter = CodeEmitter()
+        num_layers = len(layers)
+
+        emitter.emit("// Auto-generated Gemmini multi-layer MLP from RAIR MLIR")
+        emitter.emit(f"// {num_layers} layers:")
+        for idx, (M, K, N) in enumerate(layers):
+            emitter.emit(f"//   layer {idx}: [{M}x{K}] * [{K}x{N}] -> [{M}x{N}]")
+        emitter.emit("")
+
+        emitter.emit("#include <stdint.h>")
+        emitter.emit("#include <stddef.h>")
+        emitter.emit("#include <stdlib.h>")
+        emitter.emit("#include <stdio.h>")
+        emitter.emit("#ifndef BAREMETAL")
+        emitter.emit("#include <sys/mman.h>")
+        emitter.emit("#endif")
+        emitter.emit('#include "include/gemmini.h"')
+        emitter.emit('#include "include/gemmini_nn.h"')
+        emitter.emit('#include "include/gemmini_testutils.h"')
+        emitter.emit("")
+
+        # Collect unique matrix shapes
+        # We need: input to layer 0, weights for each layer, intermediates, final output
+        # Layer i: out_i[M_i x N_i] = in_i[M_i x K_i] * W_i[K_i x N_i]
+        # in_0 = input, in_{i+1} = out_i
+
+        for idx, (M, K, N) in enumerate(layers):
+            emitter.emit(f"#define L{idx}_DIM_I {M}")
+            emitter.emit(f"#define L{idx}_DIM_K {K}")
+            emitter.emit(f"#define L{idx}_DIM_J {N}")
+        emitter.emit("")
+
+        # Declare matrices
+        M0, K0, _ = layers[0]
+        emitter.emit(f"static elem_t input_mat[L0_DIM_I][L0_DIM_K] row_align(1);")
+        for idx, (M, K, N) in enumerate(layers):
+            emitter.emit(f"static elem_t weights{idx}[L{idx}_DIM_K][L{idx}_DIM_J] row_align(1);")
+            if idx < num_layers - 1:
+                emitter.emit(f"static elem_t inter{idx}[L{idx}_DIM_I][L{idx}_DIM_J] row_align(1);")
+            else:
+                emitter.emit(f"static elem_t output_mat[L{idx}_DIM_I][L{idx}_DIM_J] row_align(1);")
+        emitter.emit("")
+
+        # CPU reference arrays
+        for idx, (M, K, N) in enumerate(layers):
+            if idx < num_layers - 1:
+                emitter.emit(f"static elem_t inter{idx}_gold[L{idx}_DIM_I][L{idx}_DIM_J];")
+            else:
+                emitter.emit(f"static elem_t output_gold[L{idx}_DIM_I][L{idx}_DIM_J];")
+        emitter.emit("")
+
+        self._emit_helper_functions(emitter)
+
+        # Init function
+        emitter.emit("static void init_data(void) {")
+        emitter.indent()
+        emitter.emit("for (size_t i = 0; i < L0_DIM_I; i++)")
+        emitter.indent()
+        emitter.emit("for (size_t j = 0; j < L0_DIM_K; j++)")
+        emitter.indent()
+        emitter.emit("input_mat[i][j] = (elem_t)((i + 3 * j) % 9 - 4);")
+        emitter.dedent()
+        emitter.dedent()
+        emitter.emit("")
+
+        for idx, (M, K, N) in enumerate(layers):
+            emitter.emit(f"for (size_t i = 0; i < L{idx}_DIM_K; i++)")
+            emitter.indent()
+            emitter.emit(f"for (size_t j = 0; j < L{idx}_DIM_J; j++)")
+            emitter.indent()
+            emitter.emit(f"weights{idx}[i][j] = (elem_t)(({2 * idx + 2} * i + j) % 7 - 3);")
+            emitter.dedent()
+            emitter.dedent()
+            emitter.emit("")
+
+        emitter.dedent()
+        emitter.emit("}")
+        emitter.emit("")
+
+        # CPU reference function
+        emitter.emit("static void cpu_reference(void) {")
+        emitter.indent()
+        for idx, (M, K, N) in enumerate(layers):
+            if idx == 0:
+                in_name = "input_mat"
+            else:
+                in_name = f"inter{idx - 1}"
+            if idx < num_layers - 1:
+                out_name = f"inter{idx}_gold"
+            else:
+                out_name = "output_gold"
+
+            emitter.emit(f"for (size_t i = 0; i < L{idx}_DIM_I; i++) {{")
+            emitter.indent()
+            emitter.emit(f"for (size_t j = 0; j < L{idx}_DIM_J; j++) {{")
+            emitter.indent()
+            emitter.emit("full_t sum = 0;")
+            emitter.emit(f"for (size_t k = 0; k < L{idx}_DIM_K; k++)")
+            emitter.indent()
+            emitter.emit(f"sum += (full_t){in_name}[i][k] * (full_t)weights{idx}[k][j];")
+            emitter.dedent()
+            emitter.emit(f"{out_name}[i][j] = saturate(sum);")
+            emitter.dedent()
+            emitter.emit("}")
+            emitter.dedent()
+            emitter.emit("}")
+
+            # Feed gold output as input for next layer CPU ref
+            if idx < num_layers - 1:
+                emitter.emit(f"// Copy gold to inter{idx} for next layer CPU ref")
+                emitter.emit(f"for (size_t i = 0; i < L{idx}_DIM_I; i++)")
+                emitter.indent()
+                emitter.emit(f"for (size_t j = 0; j < L{idx}_DIM_J; j++)")
+                emitter.indent()
+                emitter.emit(f"inter{idx}[i][j] = inter{idx}_gold[i][j];")
+                emitter.dedent()
+                emitter.dedent()
+            emitter.emit("")
+
+        emitter.dedent()
+        emitter.emit("}")
+        emitter.emit("")
+
+        # main
+        emitter.emit("int main(void) {")
+        emitter.indent()
+
+        emitter.emit("#ifndef BAREMETAL")
+        emitter.emit("if (mlockall(MCL_CURRENT | MCL_FUTURE) != 0) {")
+        emitter.indent()
+        emitter.emit('perror("mlockall failed");')
+        emitter.emit("exit(1);")
+        emitter.dedent()
+        emitter.emit("}")
+        emitter.emit("#endif")
+        emitter.emit("")
+
+        emitter.emit(f'printf("MLP {num_layers}-layer Gemmini program\\n");')
+        for idx, (M, K, N) in enumerate(layers):
+            emitter.emit(f'printf("  layer {idx}: [%d x %d] * [%d x %d] -> [%d x %d]\\n",')
+            emitter.emit(f"    L{idx}_DIM_I, L{idx}_DIM_K, L{idx}_DIM_K, L{idx}_DIM_J,")
+            emitter.emit(f"    L{idx}_DIM_I, L{idx}_DIM_J);")
+        emitter.emit("")
+
+        emitter.emit("init_data();")
+        emitter.emit("")
+
+        emitter.emit('printf("Computing CPU reference...\\n");')
+        emitter.emit("uint64_t cpu_start = read_cycles();")
+        emitter.emit("cpu_reference();")
+        emitter.emit("uint64_t cpu_end = read_cycles();")
+        emitter.emit('printf("CPU reference took %llu cycles\\n", cpu_end - cpu_start);')
+        emitter.emit("")
+
+        # Re-init intermediates for Gemmini (CPU ref overwrote them)
+        for idx, (M, K, N) in enumerate(layers):
+            if idx < num_layers - 1:
+                emitter.emit(f"for (size_t i = 0; i < L{idx}_DIM_I; i++)")
+                emitter.indent()
+                emitter.emit(f"for (size_t j = 0; j < L{idx}_DIM_J; j++)")
+                emitter.indent()
+                emitter.emit(f"inter{idx}[i][j] = 0;")
+                emitter.dedent()
+                emitter.dedent()
+        emitter.emit("")
+
+        emitter.emit("gemmini_flush(0);")
+        emitter.emit("")
+
+        emitter.emit('printf("Running on Gemmini...\\n");')
+        emitter.emit("uint64_t gemmini_start = read_cycles();")
+        emitter.emit("")
+
+        # Generate Gemmini matmul for each layer
+        for idx, (M, K, N) in enumerate(layers):
+            if idx == 0:
+                in_name = "input_mat"
+            else:
+                in_name = f"inter{idx - 1}"
+            if idx < num_layers - 1:
+                out_name = f"inter{idx}"
+            else:
+                out_name = "output_mat"
+
+            emitter.emit(f"// ---- Layer {idx}: [{M}x{K}] * [{K}x{N}] ----")
+            emitter.emit(f"uint64_t l{idx}_start = read_cycles();")
+
+            if mode == "auto":
+                emitter.emit(f"tiled_matmul_auto(L{idx}_DIM_I, L{idx}_DIM_J, L{idx}_DIM_K,")
+                emitter.emit(f"    (elem_t*){in_name}, (elem_t*)weights{idx}, NULL, (elem_t*){out_name},")
+                emitter.emit(f"    L{idx}_DIM_K, L{idx}_DIM_J, L{idx}_DIM_J, L{idx}_DIM_J,")
+                emitter.emit("    MVIN_SCALE_IDENTITY, MVIN_SCALE_IDENTITY, MVIN_SCALE_IDENTITY,")
+                emitter.emit("    NO_ACTIVATION, ACC_SCALE_IDENTITY, 0, false,")
+                emitter.emit("    false, false,")
+                emitter.emit("    false, false,")
+                emitter.emit("    0,")
+                emitter.emit("    WS);")
+            else:
+                emitter.emit(f"tiled_matmul_auto(L{idx}_DIM_I, L{idx}_DIM_J, L{idx}_DIM_K,")
+                emitter.emit(f"    (elem_t*){in_name}, (elem_t*)weights{idx}, NULL, (elem_t*){out_name},")
+                emitter.emit(f"    L{idx}_DIM_K, L{idx}_DIM_J, L{idx}_DIM_J, L{idx}_DIM_J,")
+                emitter.emit("    MVIN_SCALE_IDENTITY, MVIN_SCALE_IDENTITY, MVIN_SCALE_IDENTITY,")
+                emitter.emit("    NO_ACTIVATION, ACC_SCALE_IDENTITY, 0, false,")
+                emitter.emit("    false, false,")
+                emitter.emit("    false, false,")
+                emitter.emit("    0,")
+                emitter.emit("    OS);")
+
+            emitter.emit("gemmini_fence();")
+            emitter.emit(f"uint64_t l{idx}_end = read_cycles();")
+            emitter.emit(f'printf("  Layer {idx} Gemmini: %llu cycles\\n", l{idx}_end - l{idx}_start);')
+            emitter.emit("")
+
+        emitter.emit("uint64_t gemmini_end = read_cycles();")
+        emitter.emit('printf("Total Gemmini: %llu cycles\\n", gemmini_end - gemmini_start);')
+        emitter.emit("")
+
+        # Verification on final output
+        last_M, _, last_N = layers[-1]
+        emitter.emit("// Verify final output")
+        emitter.emit("int pass = 1;")
+        emitter.emit(f"for (size_t i = 0; i < L{num_layers - 1}_DIM_I; i++) {{")
+        emitter.indent()
+        emitter.emit(f"for (size_t j = 0; j < L{num_layers - 1}_DIM_J; j++) {{")
+        emitter.indent()
+        emitter.emit("if (output_mat[i][j] != output_gold[i][j]) {")
+        emitter.indent()
+        emitter.emit('printf("MISMATCH at output[%u][%u]: got %d, expected %d\\n",')
+        emitter.emit("    (unsigned)i, (unsigned)j, output_mat[i][j], output_gold[i][j]);")
+        emitter.emit("pass = 0;")
+        emitter.dedent()
+        emitter.emit("}")
+        emitter.dedent()
+        emitter.emit("}")
+        emitter.dedent()
+        emitter.emit("}")
+        emitter.emit("")
+
+        emitter.emit("if (pass) {")
+        emitter.indent()
+        emitter.emit('printf("PASSED\\n");')
+        emitter.emit("exit(0);")
+        emitter.dedent()
+        emitter.emit("} else {")
+        emitter.indent()
+        emitter.emit('printf("FAILED\\n");')
+        emitter.emit("exit(1);")
+        emitter.dedent()
+        emitter.emit("}")
+
+        emitter.dedent()
+        emitter.emit("}")
+        emitter.emit("")
+
+        return emitter.get_code()
+
+
 # ============================================================================
 # Strategy Registry
 # ============================================================================
@@ -784,6 +1529,7 @@ class StrategyRegistry:
         "simple": SimpleGEMMStrategy,
         "workload": lambda: WorkloadGEMMStrategy(num_iterations=100),
         "blocked": lambda: BlockedGEMMStrategy(block_m=32, block_n=32, block_k=32),
+        "gemmini": GemminiStrategy,
     }
 
     @classmethod
@@ -814,6 +1560,34 @@ class StrategyRegistry:
 # ============================================================================
 
 
+def _extract_tensors(parsed: dict) -> dict[str, "TensorDescriptor"]:
+    """Extract tensor descriptors from parsed EmitC module."""
+    tensors = {}
+    for tensor_create in parsed["tensor_creates"]:
+        tensor_type = tensor_create["tensor_type"]
+        args = tensor_create["args"]
+
+        if tensor_type in ["A", "B", "C"]:
+            dim0 = get_constant_value(f"%{args[1]}", parsed["constants"])
+            dim1 = get_constant_value(f"%{args[2]}", parsed["constants"])
+            dim2 = get_constant_value(f"%{args[3]}", parsed["constants"])
+            tensors[tensor_type] = TensorDescriptor(
+                tensor_type, tensor_type, dim0, dim1, dim2
+            )
+        elif tensor_type in ["transpose_in", "transpose_out"]:
+            dims = [
+                get_constant_value(f"%{arg}", parsed["constants"])
+                for arg in args[1:]
+            ]
+            dim0 = dims[0] if len(dims) > 0 else 1
+            dim1 = dims[1] if len(dims) > 1 else 1
+            dim2 = dims[2] if len(dims) > 2 else 1
+            tensors[tensor_type] = TensorDescriptor(
+                tensor_type, tensor_type, dim0, dim1, dim2
+            )
+    return tensors
+
+
 def generate_c_with_strategy(
     mlir_content: str, strategy_name: str = "simple", verbose: bool = False
 ) -> str:
@@ -833,6 +1607,11 @@ def generate_c_with_strategy(
 
     # Get strategy
     strategy = StrategyRegistry.get_strategy(strategy_name)
+
+    # Gemmini strategy generates a complete standalone program
+    if getattr(strategy, "is_standalone_program", False):
+        tensors = _extract_tensors(parsed)
+        return strategy.generate_full_program(tensors, parsed.get("func_name"))
 
     emitter = CodeEmitter()
 

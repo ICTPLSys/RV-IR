@@ -1,67 +1,67 @@
-// RUN: torch-mlir-opt <%s --convert-rocc-to-affine --convert-rocc-to-llvm | FileCheck %s
+// RUN: torch-mlir-opt <%s --convert-rair-to-affine --convert-rair-to-llvm | FileCheck %s
 
 // CHECK: llvm.func @main()
 func.func @main() {
   // Integer constants of different bit widths
-  %c0_idx  = "rocc.constant"() {value = 0 : index} : () -> index
-  %c42_i32 = "rocc.constant"() {value = 42 : i32}  : () -> i32
-  %c11_i32 = "rocc.constant"() {value = 11 : i32}  : () -> i32
+  %c0_idx  = "rair.constant"() {value = 0 : index} : () -> index
+  %c42_i32 = "rair.constant"() {value = 42 : i32}  : () -> i32
+  %c11_i32 = "rair.constant"() {value = 11 : i32}  : () -> i32
   
-  %c4_i4   = "rocc.constant"() {value = 4 : i4}    : () -> i4
-  %c8_i4   = "rocc.constant"() {value = 8 : i4}    : () -> i4
+  %c4_i4   = "rair.constant"() {value = 4 : i4}    : () -> i4
+  %c8_i4   = "rair.constant"() {value = 8 : i4}    : () -> i4
   
-  %c42_i8  = "rocc.constant"() {value = 42 : i8}   : () -> i8
-  %c42_i16 = "rocc.constant"() {value = 42 : i16}  : () -> i16
-  %c22_i16 = "rocc.constant"() {value = 22 : i16}  : () -> i16
+  %c42_i8  = "rair.constant"() {value = 42 : i8}   : () -> i8
+  %c42_i16 = "rair.constant"() {value = 42 : i16}  : () -> i16
+  %c22_i16 = "rair.constant"() {value = 22 : i16}  : () -> i16
   
-  %c42_i64 = "rocc.constant"() {value = 42 : i64}  : () -> i64
+  %c42_i64 = "rair.constant"() {value = 42 : i64}  : () -> i64
 
   // Floating-point constants of different formats
-  %c0p0_f32  = "rocc.constant"() { value = dense<5.5> : tensor<f32>}  : () -> tensor<f32>
-  %c1p0_f32  = "rocc.constant"() { value = dense<5.5> : tensor<f32>}  : () -> tensor<f32>
+  %c0p0_f32  = "rair.constant"() { value = dense<5.5> : tensor<f32>}  : () -> tensor<f32>
+  %c1p0_f32  = "rair.constant"() { value = dense<5.5> : tensor<f32>}  : () -> tensor<f32>
   
-  %c1p0_f16  = "rocc.constant"() {value = 1.000000e+00 : f16}  : () -> f16
-  %c4p0_f16  = "rocc.constant"() {value = 4.000000e+00 : f16}  : () -> f16
-  %c4p0_bf16 = "rocc.constant"() {value = 4.000000e+00 : bf16} : () -> bf16
+  %c1p0_f16  = "rair.constant"() {value = 1.000000e+00 : f16}  : () -> f16
+  %c4p0_f16  = "rair.constant"() {value = 4.000000e+00 : f16}  : () -> f16
+  %c4p0_bf16 = "rair.constant"() {value = 4.000000e+00 : bf16} : () -> bf16
 
   // tensor constants (floating-point)
-  %vec2x3_f16  = "rocc.constant"() {value = dense<[[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]> : tensor<2x3xf16>}  : () -> tensor<2x3xf16>
-  %vec2x3_f16_2 = "rocc.constant"() {value = dense<[[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]> : tensor<2x3xf16>} : () -> tensor<2x3xf16>
-  %vec2x3_bf16 = "rocc.constant"() {value = dense<[[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]> : tensor<2x3xbf16>} : () -> tensor<2x3xbf16>
-  %vec2x3_f32  = "rocc.constant"() {value = dense<[[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]> : tensor<2x3xf32>}  : () -> tensor<2x3xf32>
+  %vec2x3_f16  = "rair.constant"() {value = dense<[[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]> : tensor<2x3xf16>}  : () -> tensor<2x3xf16>
+  %vec2x3_f16_2 = "rair.constant"() {value = dense<[[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]> : tensor<2x3xf16>} : () -> tensor<2x3xf16>
+  %vec2x3_bf16 = "rair.constant"() {value = dense<[[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]> : tensor<2x3xbf16>} : () -> tensor<2x3xbf16>
+  %vec2x3_f32  = "rair.constant"() {value = dense<[[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]> : tensor<2x3xf32>}  : () -> tensor<2x3xf32>
 
   // tensor constants (integer)
-  %vec2x3_i16 = "rocc.constant"() {value = dense<[[1, 2, 3], [4, 5, 6]]> : tensor<2x3xi16>} : () -> tensor<2x3xi16>
-  %vec2x3_i16_2 = "rocc.constant"() {value = dense<[[1, 2, 3], [4, 5, 6]]> : tensor<2x3xi16>} : () -> tensor<2x3xi16>
-  %vec1x3_i32 = "rocc.constant"() {value = dense<[[1, 2, 3]]> : tensor<1x3xi32>} : () -> tensor<1x3xi32>
+  %vec2x3_i16 = "rair.constant"() {value = dense<[[1, 2, 3], [4, 5, 6]]> : tensor<2x3xi16>} : () -> tensor<2x3xi16>
+  %vec2x3_i16_2 = "rair.constant"() {value = dense<[[1, 2, 3], [4, 5, 6]]> : tensor<2x3xi16>} : () -> tensor<2x3xi16>
+  %vec1x3_i32 = "rair.constant"() {value = dense<[[1, 2, 3]]> : tensor<1x3xi32>} : () -> tensor<1x3xi32>
 
 
   // Test cases: arithmetic operations
   // 1. Scalar floating-point addition
-  %res_f32_add = "rocc.add"(%c0p0_f32, %c1p0_f32) : (tensor<f32>, tensor<f32>) -> tensor<f32>
-  // "rocc.print"(%res_f32_add) : (tensor<f32>) -> ()
+  %res_f32_add = "rair.add"(%c0p0_f32, %c1p0_f32) : (tensor<f32>, tensor<f32>) -> tensor<f32>
+  // "rair.print"(%res_f32_add) : (tensor<f32>) -> ()
 
   
   // 2. tensor floating-point addition (same type)
-  %res_vec_f16_add = "rocc.add"(%vec2x3_f16, %vec2x3_f16_2) : (tensor<2x3xf16>, tensor<2x3xf16>) -> tensor<2x3xf16>
-  // "rocc.print"(%res_vec_f16_add) : (tensor<2x3xf16>) -> ()
+  %res_vec_f16_add = "rair.add"(%vec2x3_f16, %vec2x3_f16_2) : (tensor<2x3xf16>, tensor<2x3xf16>) -> tensor<2x3xf16>
+  // "rair.print"(%res_vec_f16_add) : (tensor<2x3xf16>) -> ()
 
   
   // 3. Scalar integer addition
-  %res_i32_add = "rocc.add"(%c42_i32, %c11_i32) : (i32, i32) -> i32
+  %res_i32_add = "rair.add"(%c42_i32, %c11_i32) : (i32, i32) -> i32
   
   // 4. tensor integer addition (same type)
-  %res_vec_i16_add = "rocc.add"(%vec2x3_i16, %vec2x3_i16_2) : (tensor<2x3xi16>, tensor<2x3xi16>) -> tensor<2x3xi16>
+  %res_vec_i16_add = "rair.add"(%vec2x3_i16, %vec2x3_i16_2) : (tensor<2x3xi16>, tensor<2x3xi16>) -> tensor<2x3xi16>
   
   // 5. Other arithmetic operations
-  %res_f16_sub = "rocc.sub"(%c1p0_f16, %c4p0_f16) : (f16, f16) -> f16
-  %res_vec_f16_sub = "rocc.sub"(%vec2x3_f16, %vec2x3_f16_2) : (tensor<2x3xf16>, tensor<2x3xf16>) -> tensor<2x3xf16>
+  %res_f16_sub = "rair.sub"(%c1p0_f16, %c4p0_f16) : (f16, f16) -> f16
+  %res_vec_f16_sub = "rair.sub"(%vec2x3_f16, %vec2x3_f16_2) : (tensor<2x3xf16>, tensor<2x3xf16>) -> tensor<2x3xf16>
 
-  %res_f16_mul = "rocc.mul"(%c1p0_f16, %c4p0_f16) : (f16, f16) -> f16
-  %res_vec_f16_mul = "rocc.mul"(%vec2x3_f16, %vec2x3_f16_2) : (tensor<2x3xf16>, tensor<2x3xf16>) -> tensor<2x3xf16>
+  %res_f16_mul = "rair.mul"(%c1p0_f16, %c4p0_f16) : (f16, f16) -> f16
+  %res_vec_f16_mul = "rair.mul"(%vec2x3_f16, %vec2x3_f16_2) : (tensor<2x3xf16>, tensor<2x3xf16>) -> tensor<2x3xf16>
 
-  %res_f16_div = "rocc.div"(%c1p0_f16, %c4p0_f16) : (f16, f16) -> f16
-  %res_vec_f16_div = "rocc.div"(%vec2x3_f16, %vec2x3_f16_2) : (tensor<2x3xf16>, tensor<2x3xf16>) -> tensor<2x3xf16>
+  %res_f16_div = "rair.div"(%c1p0_f16, %c4p0_f16) : (f16, f16) -> f16
+  %res_vec_f16_div = "rair.div"(%vec2x3_f16, %vec2x3_f16_2) : (tensor<2x3xf16>, tensor<2x3xf16>) -> tensor<2x3xf16>
 
 
   return

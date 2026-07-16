@@ -177,18 +177,18 @@ def ConvertTorchToStablehlo : Pass<"convert-torch-to-stablehlo", "func::FuncOp">
 // RISCV conversions
 //===----------------------------------------------------------------------===//
 
-// def ConvertLinalgToROCCPass : Pass<"convert-linalg-to-riscv", operation="func::FuncOp"> {
+// def ConvertLinalgToRAIRPass : Pass<"convert-linalg-to-riscv", operation="func::FuncOp"> {
 //     let summary = "Convert linalg to riscv dialect";
-//     let constructor = "rocc::createLowerLinalgToROCCPass()";
-//     let dependentDialects = [ "rocc::ROCCDialect", "tensor::TensorDialect"];
+//     let constructor = "rair::createLowerLinalgToRAIRPass()";
+//     let dependentDialects = [ "rair::RAIRDialect", "tensor::TensorDialect"];
 // }
 
 // def ConvertCimToRiscvAffinePass : Pass<"convert-riscv-to-affine", operation="func::FuncOp"> {
 //     let summary = "Convert RISC-V dialect to Affine dialect";
-//     let constructor = "rocc::createLowerToAffinePass()";
+//     let constructor = "rair::createLowerToAffinePass()";
 //     let dependentDialects = [
 //         "cim::CimDialect", 
-//         "rocc::ROCCDialect",
+//         "rair::RAIRDialect",
 //         "affine::AffineDialect",  
 //         "bufferization::BufferizationDialect", 
 //         "memref::MemRefDialect", 
@@ -197,11 +197,11 @@ def ConvertTorchToStablehlo : Pass<"convert-torch-to-stablehlo", "func::FuncOp">
 // }
 
 
-// def ConvertROCCToLLVMPass : Pass<"convert-riscv-to-llvm", operation="func::FuncOp"> {
+// def ConvertRAIRToLLVMPass : Pass<"convert-riscv-to-llvm", operation="func::FuncOp"> {
 //     let summary = "Convert RISC-V dialect to LLVM dialect";
-//     let constructor = "rocc::createLowerToLLVMPass()";
+//     let constructor = "rair::createLowerToLLVMPass()";
 //     let dependentDialects = [
-//         "rocc::ROCCDialect",
+//         "rair::RAIRDialect",
 //         "llvm::LLVMDialect",  
 //         "func::FuncDialect",
 //         "memref::MemRefDialect"

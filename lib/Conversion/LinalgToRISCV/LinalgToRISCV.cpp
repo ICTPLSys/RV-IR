@@ -36,6 +36,7 @@
 #include "mlir/Dialect/Tensor/IR/Tensor.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
+#include "mlir/IR/Builders.h"
 #include "mlir/Pass/Pass.h"
 #include "mlir/Transforms/DialectConversion.h"
 #include "llvm/ADT/FloatingPointMode.h"
@@ -46,9 +47,9 @@ using namespace mlir;
 
 //===----------------------------------------------------------------------===//
 // Linalg to RISCV Lowering Patterns
-// @brief: Pattern to lower linalg.matmul to rocc.matmul
+// @brief: Pattern to lower linalg.matmul to rair.matmul
 //===----------------------------------------------------------------------===//
-struct LinalgMatmulToROCCMatmul : public OpConversionPattern<linalg::MatmulOp> {
+struct LinalgMatmulToRAIRMatmul : public OpConversionPattern<linalg::MatmulOp> {
   using OpConversionPattern<linalg::MatmulOp>::OpConversionPattern;
 
   LogicalResult
@@ -66,20 +67,20 @@ struct LinalgMatmulToROCCMatmul : public OpConversionPattern<linalg::MatmulOp> {
       return rewriter.notifyMatchFailure(op, "output is not a tensor");
     }
     
-    // Create rocc.matmul operation
-    // auto matmulOp = rewriter.create<rocc::MatmulOp>(op.getLoc(), outputType, lhs, rhs);
-    auto matmulOp = rewriter.create<rocc::MatmulOp>(op.getLoc(), lhs, rhs, output);
+    // Create rair.matmul operation
+    // auto matmulOp = rewriter.create<rair::MatmulOp>(op.getLoc(), outputType, lhs, rhs);
+    auto matmulOp = rewriter.create<rair::MatmulOp>(op.getLoc(), lhs, rhs, output, /*accelerator=*/mlir::StringAttr(), /*tile_size=*/mlir::DenseI64ArrayAttr(), /*dataflow=*/mlir::StringAttr());
     
-    // Replace the linalg.matmul with rocc.matmul
+    // Replace the linalg.matmul with rair.matmul
     rewriter.replaceOp(op, matmulOp->getResults());
     return success();
   }
 };
 //===----------------------------------------------------------------------===//
 // Linalg to RISCV Lowering Patterns
-// @brief: Pattern to lower linalg.batch_matmul to rocc.batch_matmul
+// @brief: Pattern to lower linalg.batch_matmul to rair.batch_matmul
 //===----------------------------------------------------------------------===//
-struct LinalgBatchMatmulToROCCMatmul : public OpConversionPattern<linalg::BatchMatmulOp> {
+struct LinalgBatchMatmulToRAIRMatmul : public OpConversionPattern<linalg::BatchMatmulOp> {
   using OpConversionPattern::OpConversionPattern;
 
   LogicalResult
@@ -92,11 +93,14 @@ struct LinalgBatchMatmulToROCCMatmul : public OpConversionPattern<linalg::BatchM
     auto lhsType = dyn_cast<MemRefType>(lhs.getType());
     auto rhsType = dyn_cast<MemRefType>(rhs.getType());
     auto outputType = dyn_cast<MemRefType>(output.getType());
-    // Create rocc.batch_matmul operation
-    auto batchMatmulOp = rewriter.create<rocc::BatchMatMulOp>(
-        op.getLoc(),  
-        lhs, rhs, 
-        output               
+    // Create rair.batch_matmul operation
+    auto batchMatmulOp = rewriter.create<rair::BatchMatMulOp>(
+        op.getLoc(),
+        lhs, rhs,
+        output,
+        /*accelerator=*/mlir::StringAttr(),
+        /*tile_size=*/mlir::DenseI64ArrayAttr(),
+        /*dataflow=*/mlir::StringAttr()
     );
     
    rewriter.replaceOp(op, batchMatmulOp->getResults());
@@ -105,9 +109,9 @@ struct LinalgBatchMatmulToROCCMatmul : public OpConversionPattern<linalg::BatchM
 };
 //===----------------------------------------------------------------------===//
 // Linalg to RISCV Lowering Patterns
-// @brief: Pattern to lower linalg.matvec to rocc.matvec
+// @brief: Pattern to lower linalg.matvec to rair.matvec
 //===----------------------------------------------------------------------===//
-struct LinalgMatvecToROCCMatvec : public OpConversionPattern<linalg::MatvecOp> {
+struct LinalgMatvecToRAIRMatvec : public OpConversionPattern<linalg::MatvecOp> {
   using OpConversionPattern<linalg::MatvecOp>::OpConversionPattern;
 
   LogicalResult
@@ -124,17 +128,17 @@ struct LinalgMatvecToROCCMatvec : public OpConversionPattern<linalg::MatvecOp> {
       return rewriter.notifyMatchFailure(op, "output is not a tensor");
     }
     
-    // Create rocc.matvec operation
-    auto matvecOp = rewriter.create<rocc::MatvecOp>(op.getLoc(), outputType, lhs, rhs);
+    // Create rair.matvec operation
+    auto matvecOp = rewriter.create<rair::MatvecOp>(op.getLoc(), outputType, lhs, rhs, /*accelerator=*/mlir::StringAttr(), /*tile_size=*/mlir::DenseI64ArrayAttr());
     
-    // Replace the linalg.matvec with rocc.matvec
+    // Replace the linalg.matvec with rair.matvec
     rewriter.replaceOp(op, matvecOp.getResult());
     return success();
   }
 };
-// Pattern to lower linalg.reduce to rocc.reduce
+// Pattern to lower linalg.reduce to rair.reduce
 
-struct LinalgReduceToROCCReduce : public OpConversionPattern<linalg::ReduceOp> {
+struct LinalgReduceToRAIRReduce : public OpConversionPattern<linalg::ReduceOp> {
   using OpConversionPattern<linalg::ReduceOp>::OpConversionPattern;
 
   LogicalResult
@@ -170,7 +174,7 @@ struct LinalgReduceToROCCReduce : public OpConversionPattern<linalg::ReduceOp> {
       }
     }
 
-    auto reduceOp = rewriter.create<rocc::ReduceOp>(
+    auto reduceOp = rewriter.create<rair::ReduceOp>(
         op.getLoc(),          
         targetOutputType,     
         input,                
@@ -182,9 +186,9 @@ struct LinalgReduceToROCCReduce : public OpConversionPattern<linalg::ReduceOp> {
     return success();
   }
 };
-// Pattern to lower linalg.conv2d to rocc.conv2d
+// Pattern to lower linalg.conv2d to rair.conv2d
 
-struct LinalgConv2DToROCCConv2D : public OpConversionPattern<linalg::Conv2DOp> {
+struct LinalgConv2DToRAIRConv2D : public OpConversionPattern<linalg::Conv2DOp> {
   using OpConversionPattern<linalg::Conv2DOp>::OpConversionPattern;
 
   LogicalResult
@@ -201,18 +205,18 @@ struct LinalgConv2DToROCCConv2D : public OpConversionPattern<linalg::Conv2DOp> {
       return rewriter.notifyMatchFailure(op, "output is not a tensor");
     }
     
-    // Create rocc.conv2d operation
-    auto conv2dOp = rewriter.create<rocc::Conv2DOp>(op.getLoc(), outputType, input, kernel);
+    // Create rair.conv2d operation
+    auto conv2dOp = rewriter.create<rair::Conv2DOp>(op.getLoc(), outputType, input, kernel, /*accelerator=*/mlir::StringAttr(), /*tile_size=*/mlir::DenseI64ArrayAttr(), /*dataflow=*/mlir::StringAttr());
     
-    // Replace the linalg.conv2d with rocc.conv2d
+    // Replace the linalg.conv2d with rair.conv2d
     rewriter.replaceOp(op, conv2dOp.getResult());
     return success();
   }
 };
 
 
-// Pattern to lower linalg.transpose to rocc.transpose
-// struct LinalgTransposeToROCCTranspose : public OpConversionPattern<linalg::TransposeOp> {
+// Pattern to lower linalg.transpose to rair.transpose
+// struct LinalgTransposeToRAIRTranspose : public OpConversionPattern<linalg::TransposeOp> {
 //   using OpConversionPattern::OpConversionPattern;
 
 //   LogicalResult matchAndRewrite(
@@ -229,9 +233,9 @@ struct LinalgConv2DToROCCConv2D : public OpConversionPattern<linalg::Conv2DOp> {
 //       return rewriter.notifyMatchFailure(linalgTranspose, "permutation must be [1, 0]");
 //     }
 
-//     // 创建 rocc.transpose Op，替换原 linalg.transpose
+//     // 创建 rair.transpose Op，替换原 linalg.transpose
 //     // 注意：缓冲化后的 linalg.transpose 无返回值，直接原地修改 init
-//     auto transposeOp = rewriter.create<rocc::TransposeOp>(
+//     auto transposeOp = rewriter.create<rair::TransposeOp>(
 //         linalgTranspose.getLoc(),    // 复用原 Op 的位置信息
 //         // initMemRefType,              // 返回值类型（和 init 一致）
 //         input,                       // 输入 memref
@@ -244,8 +248,8 @@ struct LinalgConv2DToROCCConv2D : public OpConversionPattern<linalg::Conv2DOp> {
 //   }
 // };
 
-// Pattern to lower linalg.transpose to rocc.transpose
-struct LinalgTransposeToROCCTranspose : public OpConversionPattern<linalg::TransposeOp> {
+// Pattern to lower linalg.transpose to rair.transpose
+struct LinalgTransposeToRAIRTranspose : public OpConversionPattern<linalg::TransposeOp> {
   using OpConversionPattern::OpConversionPattern;
 
   LogicalResult matchAndRewrite(
@@ -266,11 +270,12 @@ struct LinalgTransposeToROCCTranspose : public OpConversionPattern<linalg::Trans
       return rewriter.notifyMatchFailure(linalgTranspose, "permutation rank mismatch with input");
     }
 
-    rewriter.create<rocc::TransposeOp>(
+    rewriter.create<rair::TransposeOp>(
         linalgTranspose.getLoc(),
         input,
         init,
-        rewriter.getDenseI64ArrayAttr(permutation)
+        rewriter.getDenseI64ArrayAttr(permutation),
+        /*accelerator=*/mlir::StringAttr()
     );
 
     rewriter.eraseOp(linalgTranspose);
@@ -278,7 +283,7 @@ struct LinalgTransposeToROCCTranspose : public OpConversionPattern<linalg::Trans
   }
 };
 
-// struct LinalgTransposeToROCCTranspose : public OpConversionPattern<linalg::TransposeOp> {
+// struct LinalgTransposeToRAIRTranspose : public OpConversionPattern<linalg::TransposeOp> {
 //   using OpConversionPattern<linalg::TransposeOp>::OpConversionPattern;
 
 //   LogicalResult
@@ -299,14 +304,14 @@ struct LinalgTransposeToROCCTranspose : public OpConversionPattern<linalg::Trans
 
 //     SmallVector<int64_t> transpValues = {1, 0};
 //     auto transpAttr = rewriter.getI64ArrayAttr(transpValues);
-//     auto transposeOp = rewriter.create<rocc::TransposeOp>(
+//     auto transposeOp = rewriter.create<rair::TransposeOp>(
 //         op.getLoc(),          // 位置信息
 //         outputType,           // 输出张量类型
 //         input,                // 输入张量
 //         transpAttr            // transp属性
 //     );
     
-//     // Replace the linalg.transpose with rocc.transpose
+//     // Replace the linalg.transpose with rair.transpose
 //     rewriter.replaceOp(op, transposeOp.getResult());
 //     return success();
 //   }
@@ -315,8 +320,8 @@ struct LinalgTransposeToROCCTranspose : public OpConversionPattern<linalg::Trans
 
 
 // Pattern to lower linalg.elemwise_binary to riscv binary ops
-template <typename LinalgOp, typename ROCCOp>
-struct LinalgBinaryToROCCBinary : public OpConversionPattern<LinalgOp> {
+template <typename LinalgOp, typename RAIROp>
+struct LinalgBinaryToRAIRBinary : public OpConversionPattern<LinalgOp> {
   using OpConversionPattern<LinalgOp>::OpConversionPattern;
 
   LogicalResult
@@ -334,16 +339,16 @@ struct LinalgBinaryToROCCBinary : public OpConversionPattern<LinalgOp> {
     }
     
     // Create the corresponding RISCV operation
-    auto roccOp = rewriter.create<ROCCOp>(op.getLoc(), outputType, lhs, rhs);
+    auto rairOp = rewriter.create<RAIROp>(op.getLoc(), outputType, lhs, rhs);
     
     // Replace the linalg operation with RISCV operation
-    rewriter.replaceOp(op, roccOp.getResult());
+    rewriter.replaceOp(op, rairOp.getResult());
     return success();
   }
 };
 // Pattern to lower linalg elemwise (single operand) to  unary ops
-template <typename LinalgOp, typename ROCCOp>  
-struct LinalgUnaryToROCCUnary : public OpConversionPattern<LinalgOp> {
+template <typename LinalgOp, typename RAIROp>  
+struct LinalgUnaryToRAIRUnary : public OpConversionPattern<LinalgOp> {
   using OpConversionPattern<LinalgOp>::OpConversionPattern;
 
   LogicalResult
@@ -357,18 +362,18 @@ struct LinalgUnaryToROCCUnary : public OpConversionPattern<LinalgOp> {
       return rewriter.notifyMatchFailure(
           op, "linalg unary op output is not a RankedTensorType (expected tensor)");
     }
-    auto roccNotOp = rewriter.create<ROCCOp>(
+    auto rairNotOp = rewriter.create<RAIROp>(
         op.getLoc(),        
         outputTensorType,   
         input               
     );
-    rewriter.replaceOp(op, roccNotOp.getResult());
+    rewriter.replaceOp(op, rairNotOp.getResult());
 
     return success();
   }
 };
-// Pattern to lower linalg.add to rocc.addf/addi
-struct LinalgAddToROCCAdd : public OpConversionPattern<linalg::AddOp> {
+// Pattern to lower linalg.add to rair.addf/addi
+struct LinalgAddToRAIRAdd : public OpConversionPattern<linalg::AddOp> {
   using OpConversionPattern<linalg::AddOp>::OpConversionPattern;
 
   LogicalResult
@@ -388,24 +393,24 @@ struct LinalgAddToROCCAdd : public OpConversionPattern<linalg::AddOp> {
     // Check element type
     // auto elementType = outputType.getElementType();
     // if (isa<FloatType>(elementType)) {
-    //   auto addFOp = rewriter.create<rocc::AddFOp>(op.getLoc(), outputType, lhs, rhs);
+    //   auto addFOp = rewriter.create<rair::AddFOp>(op.getLoc(), outputType, lhs, rhs);
     //   rewriter.replaceOp(op, addFOp.getResult());
     // } else if (isa<IntegerType>(elementType)) {
-    //   auto addIOp = rewriter.create<rocc::AddIOp>(op.getLoc(), outputType, lhs, rhs);
+    //   auto addIOp = rewriter.create<rair::AddIOp>(op.getLoc(), outputType, lhs, rhs);
     //   rewriter.replaceOp(op, addIOp.getResult());
     // } else {
     //   return rewriter.notifyMatchFailure(op, "unsupported element type");
     // }
     
-      auto addOp = rewriter.create<rocc::AddOp>(op.getLoc(), outputType, lhs, rhs);
+      auto addOp = rewriter.create<rair::AddOp>(op.getLoc(), outputType, lhs, rhs, /*accelerator=*/mlir::StringAttr());
       rewriter.replaceOp(op, addOp.getResult());
     
     return success();
   }
 };
 
-// Pattern to lower linalg.sub to rocc.subf/subi
-struct LinalgSubToROCCSub : public OpConversionPattern<linalg::SubOp> {
+// Pattern to lower linalg.sub to rair.subf/subi
+struct LinalgSubToRAIRSub : public OpConversionPattern<linalg::SubOp> {
   using OpConversionPattern<linalg::SubOp>::OpConversionPattern;
 
   LogicalResult
@@ -425,23 +430,23 @@ struct LinalgSubToROCCSub : public OpConversionPattern<linalg::SubOp> {
     // Check element type
     // auto elementType = outputType.getElementType();
     // if (isa<FloatType>(elementType)) {
-    //   auto subFOp = rewriter.create<rocc::SubFOp>(op.getLoc(), outputType, lhs, rhs);
+    //   auto subFOp = rewriter.create<rair::SubFOp>(op.getLoc(), outputType, lhs, rhs);
     //   rewriter.replaceOp(op, subFOp.getResult());
     // } else if (isa<IntegerType>(elementType)) {
-    //   auto subIOp = rewriter.create<rocc::SubIOp>(op.getLoc(), outputType, lhs, rhs);
+    //   auto subIOp = rewriter.create<rair::SubIOp>(op.getLoc(), outputType, lhs, rhs);
     //   rewriter.replaceOp(op, subIOp.getResult());
     // } else {
     //   return rewriter.notifyMatchFailure(op, "unsupported element type");
     // }
-    auto subOp = rewriter.create<rocc::SubOp>(op.getLoc(), outputType, lhs, rhs);
+    auto subOp = rewriter.create<rair::SubOp>(op.getLoc(), outputType, lhs, rhs, /*accelerator=*/mlir::StringAttr());
     rewriter.replaceOp(op, subOp.getResult());
     
     return success();
   }
 };
 
-// Pattern to lower linalg.mul to rocc.mulf/muli
-struct LinalgMulToROCCMul : public OpConversionPattern<linalg::MulOp> {
+// Pattern to lower linalg.mul to rair.mulf/muli
+struct LinalgMulToRAIRMul : public OpConversionPattern<linalg::MulOp> {
   using OpConversionPattern<linalg::MulOp>::OpConversionPattern;
 
   LogicalResult
@@ -461,23 +466,23 @@ struct LinalgMulToROCCMul : public OpConversionPattern<linalg::MulOp> {
     // Check element type
     // auto elementType = outputType.getElementType();
     // if (isa<FloatType>(elementType)) {
-    //   auto mulFOp = rewriter.create<rocc::MulFOp>(op.getLoc(), outputType, lhs, rhs);
+    //   auto mulFOp = rewriter.create<rair::MulFOp>(op.getLoc(), outputType, lhs, rhs);
     //   rewriter.replaceOp(op, mulFOp.getResult());
     // } else if (isa<IntegerType>(elementType)) {
-    //   auto mulIOp = rewriter.create<rocc::MulIOp>(op.getLoc(), outputType, lhs, rhs);
+    //   auto mulIOp = rewriter.create<rair::MulIOp>(op.getLoc(), outputType, lhs, rhs);
     //   rewriter.replaceOp(op, mulIOp.getResult());
     // } else {
     //   return rewriter.notifyMatchFailure(op, "unsupported element type");
     // }
-    auto mulOp = rewriter.create<rocc::MulOp>(op.getLoc(), outputType, lhs, rhs);
+    auto mulOp = rewriter.create<rair::MulOp>(op.getLoc(), outputType, lhs, rhs, /*accelerator=*/mlir::StringAttr());
       rewriter.replaceOp(op, mulOp.getResult());
     
     return success();
   }
 };
 
-// Pattern to lower linalg.div to rocc.divf/divsi/divui
-struct LinalgDivToROCCDiv : public OpConversionPattern<linalg::DivOp> {
+// Pattern to lower linalg.div to rair.divf/divsi/divui
+struct LinalgDivToRAIRDiv : public OpConversionPattern<linalg::DivOp> {
   using OpConversionPattern<linalg::DivOp>::OpConversionPattern;
 
   LogicalResult
@@ -497,27 +502,27 @@ struct LinalgDivToROCCDiv : public OpConversionPattern<linalg::DivOp> {
     // Check element type
     // auto elementType = outputType.getElementType();
     // if (isa<FloatType>(elementType)) {
-    //   auto divFOp = rewriter.create<rocc::DivFOp>(op.getLoc(), outputType, lhs, rhs);
+    //   auto divFOp = rewriter.create<rair::DivFOp>(op.getLoc(), outputType, lhs, rhs);
     //   rewriter.replaceOp(op, divFOp.getResult());
     // } else if (auto intType = dyn_cast<IntegerType>(elementType)) {
     //   if (intType.isSigned()) {
-    //     auto divSIOp = rewriter.create<rocc::DivSIOp>(op.getLoc(), outputType, lhs, rhs);
+    //     auto divSIOp = rewriter.create<rair::DivSIOp>(op.getLoc(), outputType, lhs, rhs);
     //     rewriter.replaceOp(op, divSIOp.getResult());
     //   } else {
-    //     auto divUIOp = rewriter.create<rocc::DivUIOp>(op.getLoc(), outputType, lhs, rhs);
+    //     auto divUIOp = rewriter.create<rair::DivUIOp>(op.getLoc(), outputType, lhs, rhs);
     //     rewriter.replaceOp(op, divUIOp.getResult());
     //   }
     // } else {
     //   return rewriter.notifyMatchFailure(op, "unsupported element type");
     // }
-    auto divOp = rewriter.create<rocc::DivOp>(op.getLoc(), outputType, lhs, rhs);
+    auto divOp = rewriter.create<rair::DivOp>(op.getLoc(), outputType, lhs, rhs, /*accelerator=*/mlir::StringAttr());
       rewriter.replaceOp(op, divOp.getResult());
     
     return success();
   }
 };
-// Pattern to lower linalg.negf to rocc.negf
-struct LinalgNegFToROCCNegF : public OpConversionPattern<linalg::NegFOp> {
+// Pattern to lower linalg.negf to rair.negf
+struct LinalgNegFToRAIRNegF : public OpConversionPattern<linalg::NegFOp> {
   using OpConversionPattern<linalg::NegFOp>::OpConversionPattern;
 
   LogicalResult
@@ -533,14 +538,14 @@ struct LinalgNegFToROCCNegF : public OpConversionPattern<linalg::NegFOp> {
       return rewriter.notifyMatchFailure(op, "output is not a tensor");
     }
     
-    auto negfOp = rewriter.create<rocc::NegFOp>(op.getLoc(), outputType, input);
+    auto negfOp = rewriter.create<rair::NegFOp>(op.getLoc(), outputType, input);
       rewriter.replaceOp(op, negfOp.getResult());
     
     return success();
   }
 };
-// Pattern to lower linalg.max to rocc.max
-struct LinalgMaxToROCCMax : public OpConversionPattern<linalg::MaxOp> {
+// Pattern to lower linalg.max to rair.max
+struct LinalgMaxToRAIRMax : public OpConversionPattern<linalg::MaxOp> {
   using OpConversionPattern<linalg::MaxOp>::OpConversionPattern;
 
   LogicalResult
@@ -557,15 +562,15 @@ struct LinalgMaxToROCCMax : public OpConversionPattern<linalg::MaxOp> {
       return rewriter.notifyMatchFailure(op, "output is not a tensor");
     }
     
-    auto maxOp = rewriter.create<rocc::MaxOp>(op.getLoc(), outputType, lhs, rhs);
+    auto maxOp = rewriter.create<rair::MaxOp>(op.getLoc(), outputType, lhs, rhs, /*accelerator=*/mlir::StringAttr());
       rewriter.replaceOp(op, maxOp.getResult());
     
     return success();
   }
 };
 
-// Pattern to lower linalg.min to rocc.min
-struct LinalgMinToROCCMin : public OpConversionPattern<linalg::MinOp> {
+// Pattern to lower linalg.min to rair.min
+struct LinalgMinToRAIRMin : public OpConversionPattern<linalg::MinOp> {
   using OpConversionPattern<linalg::MinOp>::OpConversionPattern;
 
   LogicalResult
@@ -582,15 +587,15 @@ struct LinalgMinToROCCMin : public OpConversionPattern<linalg::MinOp> {
       return rewriter.notifyMatchFailure(op, "output is not a tensor");
     }
     
-    auto maxOp = rewriter.create<rocc::MinOp>(op.getLoc(), outputType, lhs, rhs);
+    auto maxOp = rewriter.create<rair::MinOp>(op.getLoc(), outputType, lhs, rhs, /*accelerator=*/mlir::StringAttr());
     rewriter.replaceOp(op, maxOp.getResult());
     
     return success();
   }
 };
 
-// Pattern to lower linalg.pooling_nchw_max to rocc.pooling_nchw_max
-struct LinalgPoolingNchwMaxToROCC
+// Pattern to lower linalg.pooling_nchw_max to rair.pooling_nchw_max
+struct LinalgPoolingNchwMaxToRAIR
     : public OpConversionPattern<linalg::PoolingNchwMaxOp> {
   using OpConversionPattern<
       linalg::PoolingNchwMaxOp>::OpConversionPattern;
@@ -609,7 +614,69 @@ struct LinalgPoolingNchwMaxToROCC
     auto strides =
         op->getAttrOfType<TypedAttr>("strides");
 
-    auto newOp = rewriter.create<rocc::PoolingNchwMaxOp>(
+    auto newOp = rewriter.create<rair::PoolingNchwMaxOp>(
+        op.getLoc(),
+        TypeRange{},
+        ValueRange{input, kernel, output},
+        ArrayRef<NamedAttribute>{
+            rewriter.getNamedAttr("dilations", dilations),
+            rewriter.getNamedAttr("strides", strides)});
+
+    rewriter.replaceOp(op, newOp->getResults());
+    return success();
+  }
+};
+
+// Pattern to lower linalg.pooling_nchw_sum to rair.pooling_nchw_sum
+struct LinalgPoolingNchwSumToRAIR
+    : public OpConversionPattern<linalg::PoolingNchwSumOp> {
+  using OpConversionPattern<
+      linalg::PoolingNchwSumOp>::OpConversionPattern;
+
+  LogicalResult
+  matchAndRewrite(linalg::PoolingNchwSumOp op,
+                  OpAdaptor adaptor,
+                  ConversionPatternRewriter &rewriter) const override {
+
+    Value input = adaptor.getInputs()[0];
+    Value kernel = adaptor.getInputs()[1];
+    Value output = adaptor.getOutputs()[0];
+
+    auto dilations = op->getAttrOfType<TypedAttr>("dilations");
+    auto strides = op->getAttrOfType<TypedAttr>("strides");
+
+    auto newOp = rewriter.create<rair::PoolingNchwSumOp>(
+        op.getLoc(),
+        TypeRange{},
+        ValueRange{input, kernel, output},
+        ArrayRef<NamedAttribute>{
+            rewriter.getNamedAttr("dilations", dilations),
+            rewriter.getNamedAttr("strides", strides)});
+
+    rewriter.replaceOp(op, newOp->getResults());
+    return success();
+  }
+};
+
+// Pattern to lower linalg.conv_2d_nchw_fchw to rair.conv_2d_nchw_fchw
+struct LinalgConv2DNchwFchwToRAIR
+    : public OpConversionPattern<linalg::Conv2DNchwFchwOp> {
+  using OpConversionPattern<
+      linalg::Conv2DNchwFchwOp>::OpConversionPattern;
+
+  LogicalResult
+  matchAndRewrite(linalg::Conv2DNchwFchwOp op,
+                  OpAdaptor adaptor,
+                  ConversionPatternRewriter &rewriter) const override {
+
+    Value input = adaptor.getInputs()[0];
+    Value kernel = adaptor.getInputs()[1];
+    Value output = adaptor.getOutputs()[0];
+
+    auto dilations = op->getAttrOfType<TypedAttr>("dilations");
+    auto strides = op->getAttrOfType<TypedAttr>("strides");
+
+    auto newOp = rewriter.create<rair::Conv2dNchwFchwOp>(
         op.getLoc(),
         TypeRange{},
         ValueRange{input, kernel, output},
@@ -622,24 +689,55 @@ struct LinalgPoolingNchwMaxToROCC
   }
 };
 //===----------------------------------------------------------------------===//
+// MemRef to RAIR Lowering Patterns
+//===----------------------------------------------------------------------===//
+struct MemRefAllocToRAIRAlloc : public OpConversionPattern<memref::AllocOp> {
+  using OpConversionPattern::OpConversionPattern;
+
+  LogicalResult
+  matchAndRewrite(memref::AllocOp op, OpAdaptor adaptor,
+                  ConversionPatternRewriter &rewriter) const override {
+    auto allocOp = rewriter.create<rair::AllocOp>(op.getLoc(), op.getType());
+    rewriter.replaceOp(op, allocOp.getResult());
+    return success();
+  }
+};
+
+struct MemRefCopyToRAIRTransfer : public OpConversionPattern<memref::CopyOp> {
+  using OpConversionPattern::OpConversionPattern;
+
+  LogicalResult
+  matchAndRewrite(memref::CopyOp op, OpAdaptor adaptor,
+                  ConversionPatternRewriter &rewriter) const override {
+    rewriter.create<rair::TransferOp>(
+        op.getLoc(),
+        adaptor.getSource(), adaptor.getTarget(),
+        /*src_memory_space=*/mlir::StringAttr(),
+        /*dst_memory_space=*/mlir::StringAttr());
+    rewriter.eraseOp(op);
+    return success();
+  }
+};
+
+//===----------------------------------------------------------------------===//
 // Pass Definition
 //===----------------------------------------------------------------------===//
 
 namespace {
-class LinalgToROCCLowerPass
-    : public mlir::PassWrapper<LinalgToROCCLowerPass,
+class LinalgToRAIRLowerPass
+    : public mlir::PassWrapper<LinalgToRAIRLowerPass,
                                mlir::OperationPass<mlir::ModuleOp>> {
 public:
   StringRef getArgument() const final { 
-    return "convert-linalg-to-rocc"; 
+    return "convert-linalg-to-rair"; 
   }
   StringRef getDescription() const final {
-    return "Lower Linalg dialect operations to ROCC dialect";
+    return "Lower Linalg dialect operations to RAIR dialect";
   }
-  MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(LinalgToROCCLowerPass)
+  MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(LinalgToRAIRLowerPass)
 
   void getDependentDialects(mlir::DialectRegistry &registry) const override {
-    registry.insert<rocc::ROCCDialect, mlir::linalg::LinalgDialect,
+    registry.insert<rair::RAIRDialect, mlir::linalg::LinalgDialect,
                     mlir::memref::MemRefDialect,scf::SCFDialect,
                     bufferization::BufferizationDialect,func::FuncDialect,
                      mlir::arith::ArithDialect>();
@@ -649,19 +747,19 @@ public:
 };
 } // namespace
 
-void LinalgToROCCLowerPass::runOnOperation() {
+void LinalgToRAIRLowerPass::runOnOperation() {
   mlir::ConversionTarget target(getContext());
 
-  // Mark ROCC dialect as legal
-  target.addLegalDialect<rocc::ROCCDialect>();
-  
+  // Mark RAIR dialect as legal
+  target.addLegalDialect<rair::RAIRDialect>();
+
   // Keep other dialects legal for operations we don't convert
   target.addLegalDialect<mlir::BuiltinDialect,
-                         mlir::func::FuncDialect, 
+                         mlir::func::FuncDialect,
                          mlir::arith::ArithDialect,
                          mlir::tensor::TensorDialect>();
 
-  // Mark specific Linalg ops as illegal if they can be converted to ROCC
+  // Mark specific Linalg ops as illegal if they can be converted to RAIR
   target.addIllegalOp<linalg::MatmulOp>();
   target.addIllegalOp<linalg::MatvecOp>();
   target.addIllegalOp<linalg::ReduceOp>();
@@ -676,48 +774,174 @@ void LinalgToROCCLowerPass::runOnOperation() {
   target.addIllegalOp<linalg::MinOp>();
   target.addIllegalOp<linalg::BatchMatmulOp>();
   target.addIllegalOp<linalg::PoolingNchwMaxOp>();
-  
+  target.addIllegalOp<linalg::PoolingNchwSumOp>();
+  target.addIllegalOp<linalg::Conv2DNchwFchwOp>();
+  target.addIllegalOp<memref::AllocOp>();
+  target.addIllegalOp<memref::CopyOp>();
+
   // Keep other Linalg ops legal (they will not be converted)
   target.addLegalDialect<mlir::linalg::LinalgDialect>();
-  
+
   target.addDynamicallyLegalDialect<mlir::linalg::LinalgDialect>(
       [](Operation *op) {
         // These specific ops are illegal, all others are legal
         return !isa<linalg::MatmulOp, linalg::MatvecOp,
-                    linalg::TransposeOp, linalg::ReduceOp, 
+                    linalg::TransposeOp, linalg::ReduceOp,
                     linalg::AddOp, linalg::SubOp,
-                    linalg::MulOp, linalg::DivOp, 
+                    linalg::MulOp, linalg::DivOp,
                     linalg::MaxOp, linalg::MinOp,
-                    linalg::NegFOp, linalg::Conv2DOp>(op);
+                    linalg::NegFOp, linalg::Conv2DOp,
+                    linalg::BatchMatmulOp, linalg::PoolingNchwMaxOp,
+                    linalg::PoolingNchwSumOp,
+                    linalg::Conv2DNchwFchwOp>(op);
+      });
+
+  target.addDynamicallyLegalDialect<mlir::memref::MemRefDialect>(
+      [](Operation *op) {
+        return !isa<memref::AllocOp, memref::CopyOp>(op);
       });
 
   mlir::RewritePatternSet patterns(&getContext());
   // mlir::linalg::populateLinalgToStandardConversionPatterns(patterns);
-  
-  patterns.add<LinalgMatmulToROCCMatmul,
-               LinalgMatvecToROCCMatvec,
-               LinalgReduceToROCCReduce,
-               LinalgConv2DToROCCConv2D,
-               LinalgTransposeToROCCTranspose,
-               LinalgAddToROCCAdd,
-               LinalgSubToROCCSub,
-               LinalgMulToROCCMul,
-               LinalgDivToROCCDiv,
-               LinalgNegFToROCCNegF,
-               LinalgMaxToROCCMax,
-               LinalgMinToROCCMin,
-               LinalgBatchMatmulToROCCMatmul,
-               LinalgPoolingNchwMaxToROCC>(&getContext());
+
+  patterns.add<LinalgMatmulToRAIRMatmul,
+               LinalgMatvecToRAIRMatvec,
+               LinalgReduceToRAIRReduce,
+               LinalgConv2DToRAIRConv2D,
+               LinalgTransposeToRAIRTranspose,
+               LinalgAddToRAIRAdd,
+               LinalgSubToRAIRSub,
+               LinalgMulToRAIRMul,
+               LinalgDivToRAIRDiv,
+               LinalgNegFToRAIRNegF,
+               LinalgMaxToRAIRMax,
+               LinalgMinToRAIRMin,
+               LinalgBatchMatmulToRAIRMatmul,
+               LinalgPoolingNchwMaxToRAIR,
+               LinalgPoolingNchwSumToRAIR,
+               LinalgConv2DNchwFchwToRAIR,
+               MemRefAllocToRAIRAlloc,
+               MemRefCopyToRAIRTransfer>(&getContext());
 
   if (mlir::failed(mlir::applyPartialConversion(getOperation(), target,
                                                 std::move(patterns)))) {
     signalPassFailure();
+    return;
   }
+
+  // Insert accelerator context management (acquire/release) and local memory
+  // (SRAM) data movement for functions that contain RAIR compute ops.
+  // NPU programming model: data must be explicitly moved from Global Memory
+  // (DRAM) to Local Memory (SRAM) before computation, and results moved back.
+  getOperation()->walk([&](func::FuncOp funcOp) {
+    if (funcOp.isExternal() || funcOp.getBody().empty())
+      return;
+
+    // Check if this function has any RAIR compute ops
+    bool hasRAIROps = false;
+    funcOp.walk([&](Operation *op) {
+      if (isa<rair::MatmulOp, rair::BatchMatMulOp, rair::MatvecOp,
+              rair::Conv2DOp, rair::Conv2dNchwFchwOp,
+              rair::PoolingNchwMaxOp, rair::PoolingNchwSumOp,
+              rair::ReduceOp, rair::TransposeOp,
+              rair::AddOp, rair::SubOp, rair::MulOp, rair::DivOp,
+              rair::MaxOp, rair::MinOp, rair::NegFOp>(op))
+        hasRAIROps = true;
+    });
+    if (!hasRAIROps)
+      return;
+
+    OpBuilder builder(funcOp.getContext());
+    Block &entry = funcOp.getBody().front();
+    builder.setInsertionPointToStart(&entry);
+
+    // Acquire accelerator context at function entry
+    auto ctxType = rair::ContextType::get(funcOp.getContext());
+    auto acquireOp = builder.create<rair::AcquireOp>(
+        funcOp.getLoc(), ctxType,
+        builder.getStringAttr("default"));
+
+    // Insert local memory (SRAM) data movement for matmul/batch_matmul ops.
+    // For each compute op: alloc local buffers -> transfer GMEM->LMEM ->
+    // compute on LMEM -> transfer LMEM->GMEM -> dealloc local buffers.
+    SmallVector<Operation *> computeOps;
+    funcOp.walk([&](Operation *op) {
+      if (isa<rair::MatmulOp, rair::BatchMatMulOp>(op))
+        computeOps.push_back(op);
+    });
+
+    for (auto *computeOp : computeOps) {
+      Value lhs = computeOp->getOperand(0);
+      Value rhs = computeOp->getOperand(1);
+      Value output = computeOp->getOperand(2);
+      auto loc = computeOp->getLoc();
+
+      auto lhsType = cast<MemRefType>(lhs.getType());
+      auto rhsType = cast<MemRefType>(rhs.getType());
+      auto outputType = cast<MemRefType>(output.getType());
+
+      // Create contiguous local memory types (strip strided layout)
+      auto lhsLocalType = MemRefType::get(
+          lhsType.getShape(), lhsType.getElementType());
+      auto rhsLocalType = MemRefType::get(
+          rhsType.getShape(), rhsType.getElementType());
+      auto outputLocalType = MemRefType::get(
+          outputType.getShape(), outputType.getElementType());
+
+      builder.setInsertionPoint(computeOp);
+
+      // Allocate local memory (SRAM) buffers
+      auto lhsLocal = builder.create<rair::AllocBufferOp>(
+          loc, lhsLocalType, acquireOp.getResult(),
+          builder.getStringAttr("LMEM"));
+      auto rhsLocal = builder.create<rair::AllocBufferOp>(
+          loc, rhsLocalType, acquireOp.getResult(),
+          builder.getStringAttr("LMEM"));
+      auto outLocal = builder.create<rair::AllocBufferOp>(
+          loc, outputLocalType, acquireOp.getResult(),
+          builder.getStringAttr("LMEM"));
+
+      // Transfer data from Global Memory to Local Memory
+      builder.create<rair::TransferOp>(
+          loc, lhs, lhsLocal.getResult(),
+          builder.getStringAttr("GMEM"), builder.getStringAttr("LMEM"));
+      builder.create<rair::TransferOp>(
+          loc, rhs, rhsLocal.getResult(),
+          builder.getStringAttr("GMEM"), builder.getStringAttr("LMEM"));
+      builder.create<rair::TransferOp>(
+          loc, output, outLocal.getResult(),
+          builder.getStringAttr("GMEM"), builder.getStringAttr("LMEM"));
+
+      // Update compute op to use local memory buffers
+      computeOp->setOperand(0, lhsLocal.getResult());
+      computeOp->setOperand(1, rhsLocal.getResult());
+      computeOp->setOperand(2, outLocal.getResult());
+
+      // Transfer result from Local Memory back to Global Memory
+      builder.setInsertionPointAfter(computeOp);
+      builder.create<rair::TransferOp>(
+          loc, outLocal.getResult(), output,
+          builder.getStringAttr("LMEM"), builder.getStringAttr("GMEM"));
+
+      // Deallocate local memory buffers
+      builder.create<rair::DeallocBufferOp>(
+          loc, acquireOp.getResult(), lhsLocal.getResult());
+      builder.create<rair::DeallocBufferOp>(
+          loc, acquireOp.getResult(), rhsLocal.getResult());
+      builder.create<rair::DeallocBufferOp>(
+          loc, acquireOp.getResult(), outLocal.getResult());
+    }
+
+    // Release accelerator context before each return
+    funcOp.walk([&](func::ReturnOp retOp) {
+      builder.setInsertionPoint(retOp);
+      builder.create<rair::ReleaseOp>(retOp.getLoc(), acquireOp.getResult());
+    });
+  });
 }
 
-namespace rocc{
-  std::unique_ptr<mlir::Pass> createLowerLinalgToROCCPass() {
-    return std::make_unique<LinalgToROCCLowerPass>();
+namespace rair{
+  std::unique_ptr<mlir::Pass> createLowerLinalgToRAIRPass() {
+    return std::make_unique<LinalgToRAIRLowerPass>();
   }
 }
-

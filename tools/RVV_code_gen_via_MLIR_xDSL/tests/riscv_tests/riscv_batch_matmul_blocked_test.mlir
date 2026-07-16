@@ -12,7 +12,7 @@
 //     }
 //     %alloc_1 = memref.alloc() : memref<1x256x256xf32>
 //     linalg.fill ins(%cst : f32) outs(%alloc_1 : memref<1x256x256xf32>)
-//     rocc.batch_matmul ins(%arg0, %alloc_0 : memref<1x256x256xf32>, memref<1x256x256xf32>) outs(%alloc_1 : memref<1x256x256xf32>)
+//     rair.batch_matmul ins(%arg0, %alloc_0 : memref<1x256x256xf32>, memref<1x256x256xf32>) outs(%alloc_1 : memref<1x256x256xf32>)
 //     return %alloc_1 : memref<1x256x256xf32>
 //   }
 // }
@@ -32,7 +32,7 @@ module attributes {torch.debug_module_name = "LlamaDecoderBlock"} {
     %alloc_1 = memref.alloc() : memref<1x128x512xf32>
     linalg.fill ins(%cst : f32) outs(%alloc_1 : memref<1x128x512xf32>)
 
-    rocc.batch_matmul ins(%arg0, %alloc_0 : memref<1x128x2048xf32>, memref<1x2048x512xf32>) outs(%alloc_1 : memref<1x128x512xf32>)
+    rair.batch_matmul ins(%arg0, %alloc_0 : memref<1x128x2048xf32>, memref<1x2048x512xf32>) outs(%alloc_1 : memref<1x128x512xf32>)
 
     return %alloc_1 : memref<1x128x512xf32>
   }

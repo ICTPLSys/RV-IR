@@ -6,23 +6,23 @@ include "mlir/IR/EnumAttr.td"
 include "mlir/IR/AttrTypeBase.td"
 
 //===----------------------------------------------------------------------===//
-// ROCC dialect definition.
+// RAIR dialect definition.
 //===----------------------------------------------------------------------===//
 
-def ROCC_Dialect : Dialect {
+def RAIR_Dialect : Dialect {
     // 定义名字空间 namespace，对应 C++ 的 getDialectNamespace 方法返回值
-    let name = "rocc";
+    let name = "rair";
 
     // 一行关于这个 Dialect 的介绍
-    let summary = "ROCC accelerator dialect.";
+    let summary = "RAIR accelerator dialect.";
 
     // 更详细的关于这个 Dialect 的介绍
     let description = [{
-        ROCC (Rocket Custom Coprocessor) style operations for accelerator lowering.
+        RAIR (RISC-V Accelerator Interface Representation) operations for accelerator lowering.
     }];
 
     // 产生一个返回名字空间名称的接口
-    let cppNamespace = "::rocc";
+    let cppNamespace = "::rair";
 
     // 该设置用于激活 materializeConstant 方法，这使得可以例如 Canonicalize 优化
     let hasConstantMaterializer = 1;
@@ -34,45 +34,45 @@ def ROCC_Dialect : Dialect {
 // Base hello operation definition.
 //===----------------------------------------------------------------------===//
 // 定义一个 Op 作为后续其他具体 Op 的基类
-class ROCC_Op<string mnemonic, list<Trait> traits = []> :
-        Op<ROCC_Dialect, mnemonic, traits>;
+class RAIR_Op<string mnemonic, list<Trait> traits = []> :
+        Op<RAIR_Dialect, mnemonic, traits>;
 
 // Template for types.
-class ROCC_Type<string name, list<Trait> traits = []>
-        : TypeDef<ROCC_Dialect, name, traits>;
+class RAIR_Type<string name, list<Trait> traits = []>
+        : TypeDef<RAIR_Dialect, name, traits>;
 //===----------------------------------------------------------------------===//
 // Type definitions
 //===----------------------------------------------------------------------===//
 // Define a type constraint that accepts all supported tensor types
 // Using MLIR built-in tensor type definitions
-def ROCCTensor : AnyTypeOf<[
+def RAIRTensor : AnyTypeOf<[
     I1Tensor, I8Tensor, I16Tensor, I32Tensor, I64Tensor,
     BF16Tensor, F16Tensor, F32Tensor, F64Tensor, AnySignlessIntegerOrIndex, AnyFloat
 ]>;
 
 //Define sclar types
-def ROCCScalar : AnyTypeOf<[AnySignlessIntegerOrIndex,AnyFloat]>;
+def RAIRScalar : AnyTypeOf<[AnySignlessIntegerOrIndex,AnyFloat]>;
 
 // Define integer tensor types
-def ROCCIntTensor : AnyTypeOf<[I8Tensor, I16Tensor, I32Tensor, I64Tensor]>;
+def RAIRIntTensor : AnyTypeOf<[I8Tensor, I16Tensor, I32Tensor, I64Tensor]>;
 
 // Define floating point tensor types  
-def ROCCFloatTensor : AnyTypeOf<[BF16Tensor, F16Tensor, F32Tensor, F64Tensor]>;
+def RAIRFloatTensor : AnyTypeOf<[BF16Tensor, F16Tensor, F32Tensor, F64Tensor]>;
 
 //===----------------------------------------------------------------------===//
 // Interface definitions
 //===----------------------------------------------------------------------===//
 
-def ROCC_AsyncToken : DialectType<
-  ROCC_Dialect, CPred<"llvm::isa<::rocc::AsyncTokenType>($_self)">, "async token type">,
-             BuildableType<"::rocc::AsyncTokenType::get($_builder.getContext())">;
+def RAIR_AsyncToken : DialectType<
+  RAIR_Dialect, CPred<"llvm::isa<::rair::AsyncTokenType>($_self)">, "async token type">,
+             BuildableType<"::rair::AsyncTokenType::get($_builder.getContext())">;
 
-def ROCC_AsyncOpInterface : OpInterface<"AsyncOpInterface"> {
+def RAIR_AsyncOpInterface : OpInterface<"AsyncOpInterface"> {
   let description = [{
-    Interface for ROCC operations that execute asynchronously.
+    Interface for RAIR operations that execute asynchronously.
 
-    ROCC operations implementing this interface take a list of dependencies
-    as `rocc.async.token` arguments and optionally return a `rocc.async.token`.
+    RAIR operations implementing this interface take a list of dependencies
+    as `rair.async.token` arguments and optionally return a `rair.async.token`.
 
     The op doesn't start executing until all ops producing the async
     dependency tokens have finished executing.
@@ -82,7 +82,7 @@ def ROCC_AsyncOpInterface : OpInterface<"AsyncOpInterface"> {
     complete. If the op does not return a token, the op will wait for
     execution to complete.
   }];
-  let cppNamespace = "::rocc";
+  let cppNamespace = "::rair";
   let methods = [
     InterfaceMethod<[{
         Query the operands that represent async dependency tokens.
@@ -99,15 +99,15 @@ def ROCC_AsyncOpInterface : OpInterface<"AsyncOpInterface"> {
     >
   ];
 }
-def ROCC_HierarchyInterface : OpInterface<"HierarchyInterface"> {
+def RAIR_HierarchyInterface : OpInterface<"HierarchyInterface"> {
   let description = [{
-    Interface for ROCC hierarchy ops `rocc.herd`, `rocc.segment` and `rocc.launch`
+    Interface for RAIR hierarchy ops `rair.herd`, `rair.segment` and `rair.launch`
 
     Operations implementing this interface define an iteration space, support
     arguments for implementing "isolated from above" and have an integerc `id`
     attribute.
   }];
-  let cppNamespace = "::rocc";
+  let cppNamespace = "::rair";
   let methods = [
     InterfaceMethod<"Get the block arguments representing the iteration space indices (e.g., %x, %y for a 2D herd)",
     "::mlir::ArrayRef<::mlir::BlockArgument>", "getIds"
@@ -154,9 +154,9 @@ def ROCC_HierarchyInterface : OpInterface<"HierarchyInterface"> {
   ];
 }
 
-def ROCC_MemcpyInterface : OpInterface<"MemcpyInterface"> {
+def RAIR_MemcpyInterface : OpInterface<"MemcpyInterface"> {
   let description = [{}];
-  let cppNamespace = "::rocc";
+  let cppNamespace = "::rair";
   let methods = [
     InterfaceMethod<"description",
     "::mlir::Value", "getSrcMemref"
@@ -190,9 +190,13 @@ def ROCC_MemcpyInterface : OpInterface<"MemcpyInterface"> {
 //===----------------------------------------------------------------------===//
 // Type definitions
 //===----------------------------------------------------------------------===//
-def ROCC_Event : DialectType<
-  ROCC_Dialect, CPred<"llvm::isa<::rocc::EventType>($_self)">, "event type">,
-             BuildableType<"::rocc::EventType::get($_builder.getContext())">;
+def RAIR_Event : DialectType<
+  RAIR_Dialect, CPred<"llvm::isa<::rair::EventType>($_self)">, "event type">,
+             BuildableType<"::rair::EventType::get($_builder.getContext())">;
+
+def RAIR_Context : DialectType<
+  RAIR_Dialect, CPred<"llvm::isa<::rair::ContextType>($_self)">, "accelerator context type">,
+             BuildableType<"::rair::ContextType::get($_builder.getContext())">;
 
 def GMEM:  I32EnumAttrCase<"GMEM", 6>;
 def SPAD0:  I32EnumAttrCase<"SPAD0", 5>;
@@ -205,7 +209,7 @@ def LMEM:  I32EnumAttrCase<"LMEM", 0>;
 def MemorySpace: I32EnumAttr<"MemorySpace", "AIR Memory Space IDs",
   [GMEM,SPAD0,SPAD1,SPAD2,SPAD3,CIMC0,LMEM]> {
 
-  let cppNamespace = "::rocc";
+  let cppNamespace = "::rair";
 }
 
 

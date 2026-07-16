@@ -92,7 +92,7 @@ module attributes {torch.debug_module_name = "LlamaDecoderBlock"} {
     linalg.fill ins(%cst_2 : f32) outs(%alloc_12 : memref<1x128x2048xf32>)
     %alloc_13 = memref.alloc() {alignment = 64 : i64} : memref<1x128x2048xf32>
     memref.copy %alloc_12, %alloc_13 : memref<1x128x2048xf32> to memref<1x128x2048xf32>
-    rocc.batch_matmul ins(%alloc_9, %alloc_11 : memref<1x128x2048xf32>, memref<1x2048x2048xf32>) outs(%alloc_13 : memref<1x128x2048xf32>)
+    rair.batch_matmul ins(%alloc_9, %alloc_11 : memref<1x128x2048xf32>, memref<1x2048x2048xf32>) outs(%alloc_13 : memref<1x128x2048xf32>)
     %alloc_14 = memref.alloc() {alignment = 64 : i64} : memref<2048x512xf32>
    linalg.transpose ins(%3 : memref<512x2048xf32>) outs(%alloc_14 : memref<2048x512xf32>) permutation = [1, 0] 
     %alloc_15 = memref.alloc() {alignment = 64 : i64} : memref<1x2048x512xf32>
@@ -104,7 +104,7 @@ module attributes {torch.debug_module_name = "LlamaDecoderBlock"} {
     linalg.fill ins(%cst_2 : f32) outs(%alloc_16 : memref<1x128x512xf32>)
     %alloc_17 = memref.alloc() {alignment = 64 : i64} : memref<1x128x512xf32>
     memref.copy %alloc_16, %alloc_17 : memref<1x128x512xf32> to memref<1x128x512xf32>
-    rocc.batch_matmul ins(%alloc_9, %alloc_15 : memref<1x128x2048xf32>, memref<1x2048x512xf32>) outs(%alloc_17 : memref<1x128x512xf32>)
+    rair.batch_matmul ins(%alloc_9, %alloc_15 : memref<1x128x2048xf32>, memref<1x2048x512xf32>) outs(%alloc_17 : memref<1x128x512xf32>)
     %alloc_18 = memref.alloc() {alignment = 64 : i64} : memref<2048x512xf32>
    linalg.transpose ins(%3 : memref<512x2048xf32>) outs(%alloc_18 : memref<2048x512xf32>) permutation = [1, 0] 
     %alloc_19 = memref.alloc() {alignment = 64 : i64} : memref<1x2048x512xf32>
@@ -114,7 +114,7 @@ module attributes {torch.debug_module_name = "LlamaDecoderBlock"} {
     }
     %alloc_20 = memref.alloc() {alignment = 64 : i64} : memref<1x128x512xf32>
     memref.copy %alloc_16, %alloc_20 : memref<1x128x512xf32> to memref<1x128x512xf32>
-    rocc.batch_matmul ins(%alloc_9, %alloc_19 : memref<1x128x2048xf32>, memref<1x2048x512xf32>) outs(%alloc_20 : memref<1x128x512xf32>)
+    rair.batch_matmul ins(%alloc_9, %alloc_19 : memref<1x128x2048xf32>, memref<1x2048x512xf32>) outs(%alloc_20 : memref<1x128x512xf32>)
     %expand_shape = memref.expand_shape %alloc_13 [[0], [1], [2, 3]] output_shape [1, 128, 32, 64] : memref<1x128x2048xf32> into memref<1x128x32x64xf32>
     %alloc_21 = memref.alloc() {alignment = 64 : i64} : memref<1x32x128x64xf32>
     linalg.transpose ins(%expand_shape : memref<1x128x32x64xf32>) outs(%alloc_21 : memref<1x32x128x64xf32>) permutation = [0, 2, 1, 3] 
@@ -143,7 +143,7 @@ module attributes {torch.debug_module_name = "LlamaDecoderBlock"} {
     linalg.fill ins(%cst_2 : f32) outs(%alloc_31 : memref<32x128x128xf32>)
     %alloc_32 = memref.alloc() {alignment = 64 : i64} : memref<32x128x128xf32>
     memref.copy %alloc_31, %alloc_32 : memref<32x128x128xf32> to memref<32x128x128xf32>
-    rocc.batch_matmul ins(%collapse_shape_29, %collapse_shape_30 : memref<32x128x64xf32>, memref<32x64x128xf32>) outs(%alloc_32 : memref<32x128x128xf32>)
+    rair.batch_matmul ins(%collapse_shape_29, %collapse_shape_30 : memref<32x128x64xf32>, memref<32x64x128xf32>) outs(%alloc_32 : memref<32x128x128xf32>)
     %expand_shape_33 = memref.expand_shape %alloc_32 [[0, 1], [2], [3]] output_shape [1, 32, 128, 128] : memref<32x128x128xf32> into memref<1x32x128x128xf32>
     %alloc_34 = memref.alloc() {alignment = 64 : i64} : memref<1x32x128xi64>
     linalg.fill ins(%c0_i64 : i64) outs(%alloc_34 : memref<1x32x128xi64>)
@@ -196,7 +196,7 @@ module attributes {torch.debug_module_name = "LlamaDecoderBlock"} {
     linalg.fill ins(%cst_2 : f32) outs(%alloc_46 : memref<32x128x64xf32>)
     %alloc_47 = memref.alloc() {alignment = 64 : i64} : memref<32x128x64xf32>
     memref.copy %alloc_46, %alloc_47 : memref<32x128x64xf32> to memref<32x128x64xf32>
-    rocc.batch_matmul ins(%collapse_shape_44, %collapse_shape_45 : memref<32x128x128xf32>, memref<32x128x64xf32>) outs(%alloc_47 : memref<32x128x64xf32>)
+    rair.batch_matmul ins(%collapse_shape_44, %collapse_shape_45 : memref<32x128x128xf32>, memref<32x128x64xf32>) outs(%alloc_47 : memref<32x128x64xf32>)
     %expand_shape_48 = memref.expand_shape %alloc_47 [[0, 1], [2], [3]] output_shape [1, 32, 128, 64] : memref<32x128x64xf32> into memref<1x32x128x64xf32>
     %alloc_49 = memref.alloc() {alignment = 64 : i64} : memref<1x128x32x64xf32>
     linalg.transpose ins(%expand_shape_48 : memref<1x32x128x64xf32>) outs(%alloc_49 : memref<1x128x32x64xf32>) permutation = [0, 2, 1, 3] 
@@ -210,7 +210,7 @@ module attributes {torch.debug_module_name = "LlamaDecoderBlock"} {
     }
     %alloc_53 = memref.alloc() {alignment = 64 : i64} : memref<1x128x2048xf32>
     memref.copy %alloc_12, %alloc_53 : memref<1x128x2048xf32> to memref<1x128x2048xf32>
-    rocc.batch_matmul ins(%collapse_shape_50, %alloc_52 : memref<1x128x2048xf32>, memref<1x2048x2048xf32>) outs(%alloc_53 : memref<1x128x2048xf32>)
+    rair.batch_matmul ins(%collapse_shape_50, %alloc_52 : memref<1x128x2048xf32>, memref<1x2048x2048xf32>) outs(%alloc_53 : memref<1x128x2048xf32>)
     %alloc_54 = memref.alloc() {alignment = 64 : i64} : memref<1x128x2048xf32>
     linalg.generic {indexing_maps = [#map, #map, #map], iterator_types = ["parallel", "parallel", "parallel"]} ins(%arg0, %alloc_53 : memref<1x128x2048xf32, strided<[?, ?, ?], offset: ?>>, memref<1x128x2048xf32>) outs(%alloc_54 : memref<1x128x2048xf32>) {
     ^bb0(%in: f32, %in_76: f32, %out: f32):
@@ -273,7 +273,7 @@ module attributes {torch.debug_module_name = "LlamaDecoderBlock"} {
     linalg.fill ins(%cst_2 : f32) outs(%alloc_64 : memref<1x128x8192xf32>)
     %alloc_65 = memref.alloc() {alignment = 64 : i64} : memref<1x128x8192xf32>
     memref.copy %alloc_64, %alloc_65 : memref<1x128x8192xf32> to memref<1x128x8192xf32>
-    rocc.batch_matmul ins(%alloc_61, %alloc_63 : memref<1x128x2048xf32>, memref<1x2048x8192xf32>) outs(%alloc_65 : memref<1x128x8192xf32>)
+    rair.batch_matmul ins(%alloc_61, %alloc_63 : memref<1x128x2048xf32>, memref<1x2048x8192xf32>) outs(%alloc_65 : memref<1x128x8192xf32>)
     %alloc_66 = memref.alloc() {alignment = 64 : i64} : memref<1x128x8192xf32>
     linalg.generic {indexing_maps = [#map, #map], iterator_types = ["parallel", "parallel", "parallel"]} ins(%alloc_65 : memref<1x128x8192xf32>) outs(%alloc_66 : memref<1x128x8192xf32>) {
     ^bb0(%in: f32, %out: f32):
@@ -298,7 +298,7 @@ module attributes {torch.debug_module_name = "LlamaDecoderBlock"} {
     }
     %alloc_70 = memref.alloc() {alignment = 64 : i64} : memref<1x128x8192xf32>
     memref.copy %alloc_64, %alloc_70 : memref<1x128x8192xf32> to memref<1x128x8192xf32>
-    rocc.batch_matmul ins(%alloc_61, %alloc_69 : memref<1x128x2048xf32>, memref<1x2048x8192xf32>) outs(%alloc_70 : memref<1x128x8192xf32>)
+    rair.batch_matmul ins(%alloc_61, %alloc_69 : memref<1x128x2048xf32>, memref<1x2048x8192xf32>) outs(%alloc_70 : memref<1x128x8192xf32>)
     %alloc_71 = memref.alloc() {alignment = 64 : i64} : memref<1x128x8192xf32>
     linalg.generic {indexing_maps = [#map, #map, #map], iterator_types = ["parallel", "parallel", "parallel"]} ins(%alloc_67, %alloc_70 : memref<1x128x8192xf32>, memref<1x128x8192xf32>) outs(%alloc_71 : memref<1x128x8192xf32>) {
     ^bb0(%in: f32, %in_76: f32, %out: f32):
@@ -314,7 +314,7 @@ module attributes {torch.debug_module_name = "LlamaDecoderBlock"} {
     }
     %alloc_74 = memref.alloc() {alignment = 64 : i64} : memref<1x128x2048xf32>
     memref.copy %alloc_12, %alloc_74 : memref<1x128x2048xf32> to memref<1x128x2048xf32>
-    rocc.batch_matmul ins(%alloc_71, %alloc_73 : memref<1x128x8192xf32>, memref<1x8192x2048xf32>) outs(%alloc_74 : memref<1x128x2048xf32>)
+    rair.batch_matmul ins(%alloc_71, %alloc_73 : memref<1x128x8192xf32>, memref<1x8192x2048xf32>) outs(%alloc_74 : memref<1x128x2048xf32>)
     %alloc_75 = memref.alloc() {alignment = 64 : i64} : memref<1x128x2048xf32>
     linalg.generic {indexing_maps = [#map, #map, #map], iterator_types = ["parallel", "parallel", "parallel"]} ins(%alloc_54, %alloc_74 : memref<1x128x2048xf32>, memref<1x128x2048xf32>) outs(%alloc_75 : memref<1x128x2048xf32>) {
     ^bb0(%in: f32, %in_76: f32, %out: f32):

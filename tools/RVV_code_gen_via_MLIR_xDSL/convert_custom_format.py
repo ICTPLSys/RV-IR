@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-Convert RoCC dialect custom assembly to generic MLIR format for xDSL parsing.
+Convert RAIR dialect custom assembly to generic MLIR format for xDSL parsing.
 
-This script preprocesses MLIR files to convert custom RoCC dialect syntax
+This script preprocesses MLIR files to convert custom RAIR dialect syntax
 to generic MLIR format that xDSL can parse.
 """
 
@@ -10,15 +10,15 @@ import re
 import sys
 
 
-def convert_rocc_batch_matmul(line):
+def convert_rair_batch_matmul(line):
     """
     Convert custom format:
-        rocc.batch_matmul ins(%A, %B : typeA, typeB) outs(%C : typeC)
+        rair.batch_matmul ins(%A, %B : typeA, typeB) outs(%C : typeC)
     To generic format:
-        "rocc.batch_matmul"(%A, %B, %C) : (typeA, typeB, typeC) -> typeC
+        "rair.batch_matmul"(%A, %B, %C) : (typeA, typeB, typeC) -> typeC
     """
     pattern = (
-        r"(?:%(\w+)\s*=\s*)?rocc\.batch_matmul\s+ins\(([^)]+)\)\s+outs\(([^)]+)\)"
+        r"(?:%(\w+)\s*=\s*)?rair\.batch_matmul\s+ins\(([^)]+)\)\s+outs\(([^)]+)\)"
     )
 
     def replace_func(match):
@@ -45,20 +45,59 @@ def convert_rocc_batch_matmul(line):
         type_c = outs_match.group(2).strip()
 
         if result_var:
-            return f'%{result_var} = "rocc.batch_matmul"({op_a}, {op_b}, {op_c}) : ({type_a}, {type_b}, {type_c}) -> {type_c}'
-        return f'"rocc.batch_matmul"({op_a}, {op_b}, {op_c}) : ({type_a}, {type_b}, {type_c}) -> ()'
+            return f'%{result_var} = "rair.batch_matmul"({op_a}, {op_b}, {op_c}) : ({type_a}, {type_b}, {type_c}) -> {type_c}'
+        return f'"rair.batch_matmul"({op_a}, {op_b}, {op_c}) : ({type_a}, {type_b}, {type_c}) -> ()'
 
     return re.sub(pattern, replace_func, line)
 
 
-def convert_rocc_transpose(line):
+def convert_rair_matmul(line):
     """
     Convert custom format:
-        rocc.transpose ins(%input : typeInput) outs(%output : typeOutput) {permutation = array<i64: ...>}
-        OR
-        rocc.transpose ins(%input : typeInput) outs(%output : typeOutput) permutation = [...]
+        rair.matmul ins(%A, %B : typeA, typeB) outs(%C : typeC)
     To generic format:
-        "rocc.transpose"(%input, %output) {permutation = array<i64: ...>} : (typeInput, typeOutput) -> ()
+        %result = "rair.matmul"(%A, %B, %C) : (typeA, typeB, typeC) -> typeC
+    """
+    pattern = r"(?:%(\w+)\s*=\s*)?rair\.matmul\s+ins\(([^)]+)\)\s+outs\(([^)]+)\)"
+
+    def replace_func(match):
+        result_var = match.group(1)
+        ins_part = match.group(2)
+        outs_part = match.group(3)
+
+        ins_match = re.match(
+            r"\s*([^,]+),\s*([^,]+)\s*:\s*([^,]+),\s*(.+)\s*", ins_part
+        )
+        if not ins_match:
+            return match.group(0)
+
+        op_a = ins_match.group(1).strip()
+        op_b = ins_match.group(2).strip()
+        type_a = ins_match.group(3).strip()
+        type_b = ins_match.group(4).strip()
+
+        outs_match = re.match(r"\s*([^:]+)\s*:\s*(.+)\s*", outs_part)
+        if not outs_match:
+            return match.group(0)
+
+        op_c = outs_match.group(1).strip()
+        type_c = outs_match.group(2).strip()
+
+        if result_var:
+            return f'%{result_var} = "rair.matmul"({op_a}, {op_b}, {op_c}) : ({type_a}, {type_b}, {type_c}) -> {type_c}'
+        return f'"rair.matmul"({op_a}, {op_b}, {op_c}) : ({type_a}, {type_b}, {type_c}) -> ()'
+
+    return re.sub(pattern, replace_func, line)
+
+
+def convert_rair_transpose(line):
+    """
+    Convert custom format:
+        rair.transpose ins(%input : typeInput) outs(%output : typeOutput) {permutation = array<i64: ...>}
+        OR
+        rair.transpose ins(%input : typeInput) outs(%output : typeOutput) permutation = [...]
+    To generic format:
+        "rair.transpose"(%input, %output) {permutation = array<i64: ...>} : (typeInput, typeOutput) -> ()
     """
     if "permutation" not in line:
         return line
@@ -70,7 +109,7 @@ def convert_rocc_transpose(line):
     main_part = parts[0].strip()
     perm_part = parts[1].strip()
 
-    pattern = r"rocc\.transpose\s+ins\(([^)]+)\)\s+outs\(([^)]+)\)"
+    pattern = r"rair\.transpose\s+ins\(([^)]+)\)\s+outs\(([^)]+)\)"
 
     match = re.match(pattern, main_part)
     if not match:
@@ -101,7 +140,7 @@ def convert_rocc_transpose(line):
     else:
         attrs_generic = ""
 
-    return f'"rocc.transpose"({op_input}, {op_output}) {attrs_generic} : ({type_input}, {type_output}) -> ()'
+    return f'"rair.transpose"({op_input}, {op_output}) {attrs_generic} : ({type_input}, {type_output}) -> ()'
 
 
 def convert_linalg_fill(line):
@@ -143,7 +182,7 @@ def convert_file(input_file, output_file):
         return " ".join(full_match.split())
 
     content = re.sub(
-        r"rocc\.transpose\s+ins\([^)]+\)[^{]*\{[^\}]*\}",
+        r"rair\.transpose\s+ins\([^)]+\)[^{]*\{[^\}]*\}",
         combine_transpose_lines,
         content,
         flags=re.DOTALL,
@@ -152,8 +191,9 @@ def convert_file(input_file, output_file):
     lines = content.splitlines(keepends=True)
     converted_lines = []
     for line in lines:
-        line = convert_rocc_batch_matmul(line)
-        line = convert_rocc_transpose(line)
+        line = convert_rair_batch_matmul(line)
+        line = convert_rair_matmul(line)
+        line = convert_rair_transpose(line)
         line = convert_linalg_fill(line)
         converted_lines.append(line)
 

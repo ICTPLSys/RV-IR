@@ -111,9 +111,9 @@ static void lowerOpToLoops(Operation *op, ValueRange operands,
 //===----------------------------------------------------------------------===//
 //Scalar type
 struct ScalarConstantOpLowering
-    : public OpConversionPattern<rocc::ConstantOp> {
-  using OpConversionPattern<rocc::ConstantOp>::OpConversionPattern;
-  // mlir::LogicalResult match(rocc::ConstantOp op) const override {
+    : public OpConversionPattern<rair::ConstantOp> {
+  using OpConversionPattern<rair::ConstantOp>::OpConversionPattern;
+  // mlir::LogicalResult match(rair::ConstantOp op) const override {
 
   //   // if (!op.getType().isa<mlir::TensorType>()) {
   //   if (!mlir::isa<mlir::TensorType>(op.getType())) {
@@ -123,7 +123,7 @@ struct ScalarConstantOpLowering
   // }
 
   LogicalResult
-  matchAndRewrite(rocc::ConstantOp op, OpAdaptor adaptor,
+  matchAndRewrite(rair::ConstantOp op, OpAdaptor adaptor,
                   ConversionPatternRewriter &rewriter) const override {
     Location loc = op.getLoc();
     TypedAttr valueTypedAttr = op.getValue(); 
@@ -133,10 +133,10 @@ struct ScalarConstantOpLowering
     return success();
   }
 };
-class TensorConstantOpLowering : public mlir::OpRewritePattern<rocc::ConstantOp> {
-  using OpRewritePattern<rocc::ConstantOp>::OpRewritePattern;
+class TensorConstantOpLowering : public mlir::OpRewritePattern<rair::ConstantOp> {
+  using OpRewritePattern<rair::ConstantOp>::OpRewritePattern;
     // 仅匹配Tensor类型
-  // mlir::LogicalResult match(rocc::ConstantOp op) const override {
+  // mlir::LogicalResult match(rair::ConstantOp op) const override {
   //   // if (!op.getType().isa<mlir::TensorType>()) {
   //   if (!mlir::isa<mlir::TensorType>(op.getType())) {
   //     return mlir::success();
@@ -144,7 +144,7 @@ class TensorConstantOpLowering : public mlir::OpRewritePattern<rocc::ConstantOp>
   //   return mlir::failure();
   // }
   mlir::LogicalResult
-  matchAndRewrite(rocc::ConstantOp op,
+  matchAndRewrite(rair::ConstantOp op,
                   mlir::PatternRewriter &rewriter) const final {
     //DenseElementsAttr 是 MLIR 中表示 “稠密元素属性” 的类型（可存储张量 / 向量的所有元素值
     mlir::Attribute attr = op.getValue();
@@ -246,11 +246,11 @@ class TensorConstantOpLowering : public mlir::OpRewritePattern<rocc::ConstantOp>
     return mlir::success();
   }
 };
-// class ConstantOpLowering : public mlir::OpRewritePattern<rocc::ConstantOp> {
-//   using OpRewritePattern<rocc::ConstantOp>::OpRewritePattern;
+// class ConstantOpLowering : public mlir::OpRewritePattern<rair::ConstantOp> {
+//   using OpRewritePattern<rair::ConstantOp>::OpRewritePattern;
 
 //   mlir::LogicalResult
-//   matchAndRewrite(rocc::ConstantOp op,
+//   matchAndRewrite(rair::ConstantOp op,
 //                   mlir::PatternRewriter &rewriter) const final {
 //     //DenseElementsAttr 是 MLIR 中表示 “稠密元素属性” 的类型（可存储张量 / 向量的所有元素值
 //     mlir::Attribute attr = op.getValue();
@@ -654,14 +654,14 @@ struct ArithFuncOpLowering : public mlir::OpConversionPattern<func::FuncOp> {
 //===----------------------------------------------------------------------===//
 // PrintOpLowering
 //===----------------------------------------------------------------------===//
-// TODO:"rocc.print"(%2) : (tensor<i64>) -> ()
-class PrintOpLowering : public mlir::OpConversionPattern<rocc::PrintOp> {
-  using OpConversionPattern<rocc::PrintOp>::OpConversionPattern;
+// TODO:"rair.print"(%2) : (tensor<i64>) -> ()
+class PrintOpLowering : public mlir::OpConversionPattern<rair::PrintOp> {
+  using OpConversionPattern<rair::PrintOp>::OpConversionPattern;
 
   mlir::LogicalResult
-  matchAndRewrite(rocc::PrintOp op, OpAdaptor adaptor,
+  matchAndRewrite(rair::PrintOp op, OpAdaptor adaptor,
                   mlir::ConversionPatternRewriter &rewriter) const final {
-    // We don't lower "rocc.print" in this pass, but we need to update its
+    // We don't lower "rair.print" in this pass, but we need to update its
     // operands.
     rewriter.modifyOpInPlace(op,
                                [&] { op->setOperands(adaptor.getOperands()); });
@@ -674,7 +674,7 @@ class PrintOpLowering : public mlir::OpConversionPattern<rocc::PrintOp> {
 //===----------------------------------------------------------------------===//
 // struct MatmulOpLowering : public ConversionPattern {
 //   MatmulOpLowering(MLIRContext *ctx)
-//       : ConversionPattern(rocc::MatmulOp::getOperationName(), 1, ctx) {}
+//       : ConversionPattern(rair::MatmulOp::getOperationName(), 1, ctx) {}
 
 //   LogicalResult
 //   matchAndRewrite(Operation *op, ArrayRef<Value> operands,
@@ -690,7 +690,7 @@ class PrintOpLowering : public mlir::OpConversionPattern<rocc::PrintOp> {
 //     auto memRefType = convertTensorToMemRef(tensorType);
 //     auto alloc_output = insertAllocAndDealloc(memRefType, loc, rewriter);
 
-//     typename rocc::MatmulOp::Adaptor binaryAdaptor(operands);
+//     typename rair::MatmulOp::Adaptor binaryAdaptor(operands);
 
 //     auto lhsType =
 //         llvm::dyn_cast<RankedTensorType>(op->getOperand(0).getType());
@@ -759,13 +759,13 @@ class PrintOpLowering : public mlir::OpConversionPattern<rocc::PrintOp> {
 
 struct MatmulOpLowering : public ConversionPattern {
   MatmulOpLowering(MLIRContext *ctx)
-      : ConversionPattern(rocc::MatmulOp::getOperationName(), 1, ctx) {}
+      : ConversionPattern(rair::MatmulOp::getOperationName(), 1, ctx) {}
 
   LogicalResult
   matchAndRewrite(Operation *op, ArrayRef<Value> operands,
                   ConversionPatternRewriter &rewriter) const final {
     auto loc = op->getLoc();
-    auto matmulOp = cast<rocc::MatmulOp>(op);
+    auto matmulOp = cast<rair::MatmulOp>(op);
     Value lhs = matmulOp.getLhs();    // memref<MxK>
     Value rhs = matmulOp.getRhs();    // memref<KxN>
     Value out = matmulOp.getOutput();   // memref<MxN>
@@ -820,13 +820,13 @@ struct MatmulOpLowering : public ConversionPattern {
 //===----------------------------------------------------------------------===//
 struct BatchMatmulOpLowering : public ConversionPattern {
   BatchMatmulOpLowering(MLIRContext *ctx)
-      : ConversionPattern(rocc::BatchMatMulOp::getOperationName(), 1, ctx) {}
+      : ConversionPattern(rair::BatchMatMulOp::getOperationName(), 1, ctx) {}
 
   LogicalResult
   matchAndRewrite(Operation *op, ArrayRef<Value> operands,
                   ConversionPatternRewriter &rewriter) const final {
     auto loc = op->getLoc();
-    auto batchMatmulOp = cast<rocc::BatchMatMulOp>(op);
+    auto batchMatmulOp = cast<rair::BatchMatMulOp>(op);
     Value lhs = batchMatmulOp.getLhs();
     Value rhs = batchMatmulOp.getRhs();
     Value out = batchMatmulOp.getOutput();
@@ -882,14 +882,14 @@ struct BatchMatmulOpLowering : public ConversionPattern {
 //===----------------------------------------------------------------------===//
 struct MatvecOpLowering : public ConversionPattern {
   MatvecOpLowering(MLIRContext *ctx)
-      : ConversionPattern(rocc::MatvecOp::getOperationName(), 1, ctx) {}
+      : ConversionPattern(rair::MatvecOp::getOperationName(), 1, ctx) {}
 
   LogicalResult
   matchAndRewrite(Operation *op, ArrayRef<Value> operands,
                   ConversionPatternRewriter &rewriter) const final {
     auto loc = op->getLoc();
     
-    auto matvecOp = cast<rocc::MatvecOp>(op);
+    auto matvecOp = cast<rair::MatvecOp>(op);
     auto lhsType = mlir::cast<RankedTensorType>(matvecOp.getLhs().getType());
     auto rhsType = mlir::cast<RankedTensorType>(matvecOp.getRhs().getType());
     auto resultType = mlir::cast<RankedTensorType>(matvecOp.getResult().getType());
@@ -967,7 +967,7 @@ struct MatvecOpLowering : public ConversionPattern {
 //===----------------------------------------------------------------------===//
 // struct TransposeOpLowering : public ConversionPattern {
 //   TransposeOpLowering(MLIRContext *ctx)
-//       : ConversionPattern(rocc::TransposeOp::getOperationName(), 1, ctx) {}
+//       : ConversionPattern(rair::TransposeOp::getOperationName(), 1, ctx) {}
 
 //   LogicalResult
 //   matchAndRewrite(Operation *op, ArrayRef<Value> operands,
@@ -979,7 +979,7 @@ struct MatvecOpLowering : public ConversionPattern {
 //                      // Generate an adaptor for the remapped operands of the
 //                      // TransposeOp. This allows for using the nice named
 //                      // accessors that are generated by the ODS.
-//                      rocc::TransposeOpAdaptor transposeAdaptor(memRefOperands);
+//                      rair::TransposeOpAdaptor transposeAdaptor(memRefOperands);
 //                      Value input = transposeAdaptor.getInput();
 
 //                      // Transpose the elements by generating a load from the
@@ -996,13 +996,13 @@ struct MatvecOpLowering : public ConversionPattern {
 //===----------------------------------------------------------------------===//
 // struct TransposeOpLowering : public ConversionPattern {
 //   TransposeOpLowering(MLIRContext *ctx)
-//       : ConversionPattern(rocc::TransposeOp::getOperationName(), 1, ctx) {}
+//       : ConversionPattern(rair::TransposeOp::getOperationName(), 1, ctx) {}
 
 //   LogicalResult
 //   matchAndRewrite(Operation *op, ArrayRef<Value> operands,
 //                   ConversionPatternRewriter &rewriter) const final {
 //     auto loc = op->getLoc();
-//     auto transposeOp = cast<rocc::TransposeOp>(op);
+//     auto transposeOp = cast<rair::TransposeOp>(op);
 //     auto transpAttrList = transposeOp.getTransp().getValue();
 //     SmallVector<int64_t, 4> transpDims; 
 //     for (mlir::Attribute attr : transpAttrList) {
@@ -1013,7 +1013,7 @@ struct MatvecOpLowering : public ConversionPattern {
 //                    [loc, transpDims](OpBuilder &builder, ValueRange memRefOperands,
 //                                      ValueRange loopIvs) {
           
-//                      rocc::TransposeOpAdaptor transposeAdaptor(memRefOperands);
+//                      rair::TransposeOpAdaptor transposeAdaptor(memRefOperands);
 //                      Value inputMemRef = transposeAdaptor.getInput();
 
 //                      SmallVector<Value, 4> transposedIvs;
@@ -1032,13 +1032,13 @@ struct MatvecOpLowering : public ConversionPattern {
 //===----------------------------------------------------------------------===//
 struct TransposeOpLowering : public ConversionPattern {
   TransposeOpLowering(MLIRContext *ctx)
-      : ConversionPattern(rocc::TransposeOp::getOperationName(), 1, ctx) {}
+      : ConversionPattern(rair::TransposeOp::getOperationName(), 1, ctx) {}
 
 LogicalResult
 matchAndRewrite(Operation *op, ArrayRef<Value> operands,
                 ConversionPatternRewriter &rewriter) const final {
   auto loc = op->getLoc();
-  auto transposeOp = cast<rocc::TransposeOp>(op);
+  auto transposeOp = cast<rair::TransposeOp>(op);
 
   Value input = transposeOp.getInput(); // 转置的输入张量（MemRef类型）
   Value output = transposeOp.getInit(); // 转置的输出张量（MemRef类型）
@@ -1072,16 +1072,16 @@ matchAndRewrite(Operation *op, ArrayRef<Value> operands,
 //===----------------------------------------------------------------------===//
 // ToAffine RewritePatterns: Reduce operations
 //===----------------------------------------------------------------------===//
-//******注：此处注释掉的代码是保留规约维度的代码，满足案例：%res1 = "rocc.reduce"(%0) {kind = "sum",dim=[0]} : (tensor<3x2x4xf64>) -> tensor<1x2x4xf64>******//
+//******注：此处注释掉的代码是保留规约维度的代码，满足案例：%res1 = "rair.reduce"(%0) {kind = "sum",dim=[0]} : (tensor<3x2x4xf64>) -> tensor<1x2x4xf64>******//
 // struct ReduceOpLowering : public ConversionPattern {
 //   ReduceOpLowering(MLIRContext *ctx)
-//       : ConversionPattern(rocc::ReduceOp::getOperationName(), 1, ctx) {}
+//       : ConversionPattern(rair::ReduceOp::getOperationName(), 1, ctx) {}
 
 //   mlir::LogicalResult
 //   matchAndRewrite(Operation *op, ArrayRef<Value> operands,
 //                   ConversionPatternRewriter &rewriter) const final {
 //     auto loc = op->getLoc();
-//     auto reduceOp = cast<rocc::ReduceOp>(op);
+//     auto reduceOp = cast<rair::ReduceOp>(op);
 
 //     auto inputTensorType = dyn_cast<RankedTensorType>(reduceOp.getInput().getType());
 //     auto resultTensorType = dyn_cast<RankedTensorType>(reduceOp.getResult().getType());
@@ -1244,13 +1244,13 @@ matchAndRewrite(Operation *op, ArrayRef<Value> operands,
 // };
 struct ReduceOpLowering : public ConversionPattern {
   ReduceOpLowering(MLIRContext *ctx)
-      : ConversionPattern(rocc::ReduceOp::getOperationName(), 1, ctx) {}
+      : ConversionPattern(rair::ReduceOp::getOperationName(), 1, ctx) {}
 
   mlir::LogicalResult
   matchAndRewrite(Operation *op, ArrayRef<Value> operands,
                   ConversionPatternRewriter &rewriter) const final {
     auto loc = op->getLoc();
-    auto reduceOp = cast<rocc::ReduceOp>(op);
+    auto reduceOp = cast<rair::ReduceOp>(op);
 
     auto inputTensorType = dyn_cast<RankedTensorType>(reduceOp.getInput().getType());
     auto resultTensorType = dyn_cast<RankedTensorType>(reduceOp.getResult().getType());
@@ -1732,52 +1732,52 @@ template <typename BinaryOp>
 struct BinaryOpArithMap {};
 
 template <>
-struct BinaryOpArithMap<rocc::AddOp> {
+struct BinaryOpArithMap<rair::AddOp> {
   using IntArithOp = arith::AddIOp;   
   using FloatArithOp = arith::AddFOp; 
 };
 
 template <>
-struct BinaryOpArithMap<rocc::SubOp> {
+struct BinaryOpArithMap<rair::SubOp> {
   using IntArithOp = arith::SubIOp;   
   using FloatArithOp = arith::SubFOp; 
 };
 
 template <>
-struct BinaryOpArithMap<rocc::MulOp> {
+struct BinaryOpArithMap<rair::MulOp> {
   using IntArithOp = arith::MulIOp;  
   using FloatArithOp = arith::MulFOp; 
 };
 template <>
-struct BinaryOpArithMap<rocc::OrIOp> {
+struct BinaryOpArithMap<rair::OrIOp> {
   using IntArithOp = arith::OrIOp; 
 };
 template <>
-struct BinaryOpArithMap<rocc::XOrIOp> {
+struct BinaryOpArithMap<rair::XOrIOp> {
   using IntArithOp = arith::XOrIOp; 
  
 };
 template <>
-struct BinaryOpArithMap<rocc::AndIOp> {
+struct BinaryOpArithMap<rair::AndIOp> {
   using IntArithOp = arith::AndIOp; 
  
 };
 
 template <>
-struct BinaryOpArithMap<rocc::DivOp> {
+struct BinaryOpArithMap<rair::DivOp> {
   using FloatArithOp = arith::DivFOp; 
   using SignedIntArithOp = arith::DivSIOp;   // 有符号整数除法
   using UnsignedIntArithOp = arith::DivUIOp; // 无符号整数除法
 };
 
 template <>
-struct BinaryOpArithMap<rocc::MaxOp> {
+struct BinaryOpArithMap<rair::MaxOp> {
   // using FloatArithOp = arith::DivFOp; 
   using SignedIntArithOp = arith::MaxSIOp;   
   using UnsignedIntArithOp = arith::MaxUIOp; 
 };
 template <>
-struct BinaryOpArithMap<rocc::MinOp> {
+struct BinaryOpArithMap<rair::MinOp> {
   // using FloatArithOp = arith::DivFOp; 
   using SignedIntArithOp = arith::MinSIOp;   
   using UnsignedIntArithOp = arith::MinUIOp; 
@@ -1993,18 +1993,18 @@ struct BinaryOpLowering : public ConversionPattern {
   }
 };
 
-using AddOpLowering = BinaryOpLowering<rocc::AddOp>;    
-using SubOpLowering = BinaryOpLowering<rocc::SubOp>;    
-using MulOpLowering = BinaryOpLowering<rocc::MulOp>;
-using DivOpLowering = BinaryOpLowering<rocc::DivOp>;    
+using AddOpLowering = BinaryOpLowering<rair::AddOp>;    
+using SubOpLowering = BinaryOpLowering<rair::SubOp>;    
+using MulOpLowering = BinaryOpLowering<rair::MulOp>;
+using DivOpLowering = BinaryOpLowering<rair::DivOp>;    
 
 
-using AndIOpLowering = BinaryOpLowering<rocc::AndIOp>;
-using XOrIOpLowering = BinaryOpLowering<rocc::XOrIOp>;
-using OrIOpLowering = BinaryOpLowering<rocc::OrIOp>;
+using AndIOpLowering = BinaryOpLowering<rair::AndIOp>;
+using XOrIOpLowering = BinaryOpLowering<rair::XOrIOp>;
+using OrIOpLowering = BinaryOpLowering<rair::OrIOp>;
 
-using MaxOpLowering = BinaryOpLowering<rocc::MaxOp>;
-using MinOpLowering = BinaryOpLowering<rocc::MinOp>;
+using MaxOpLowering = BinaryOpLowering<rair::MaxOp>;
+using MinOpLowering = BinaryOpLowering<rair::MinOp>;
 // template <typename BinaryOp, typename LoweredBinaryOp>
 // struct BinaryOpLowering : public ConversionPattern {
 //   BinaryOpLowering(MLIRContext *ctx)
@@ -2037,16 +2037,16 @@ using MinOpLowering = BinaryOpLowering<rocc::MinOp>;
 //     return success();
 //   }
 // };
-// using AddFOpLowering = BinaryOpLowering<rocc::AddFOp, arith::AddFOp>;
-// using SubFOpLowering = BinaryOpLowering<rocc::SubFOp, arith::SubFOp>;
-// using MulFOpLowering = BinaryOpLowering<rocc::MulFOp, arith::MulFOp>;
-// using DivFOpLowering = BinaryOpLowering<rocc::DivFOp, arith::DivFOp>;
+// using AddFOpLowering = BinaryOpLowering<rair::AddFOp, arith::AddFOp>;
+// using SubFOpLowering = BinaryOpLowering<rair::SubFOp, arith::SubFOp>;
+// using MulFOpLowering = BinaryOpLowering<rair::MulFOp, arith::MulFOp>;
+// using DivFOpLowering = BinaryOpLowering<rair::DivFOp, arith::DivFOp>;
 
-// using AddIOpLowering = BinaryOpLowering<rocc::AddIOp, arith::AddIOp>;
-// using SubIOpLowering = BinaryOpLowering<rocc::SubIOp, arith::SubIOp>;
-// using MulIOpLowering = BinaryOpLowering<rocc::MulIOp, arith::MulIOp>;
-// using DivSIOpLowering = BinaryOpLowering<rocc::DivSIOp, arith::DivSIOp>;
-// using DivUIOpLowering = BinaryOpLowering<rocc::DivUIOp, arith::DivUIOp>;
+// using AddIOpLowering = BinaryOpLowering<rair::AddIOp, arith::AddIOp>;
+// using SubIOpLowering = BinaryOpLowering<rair::SubIOp, arith::SubIOp>;
+// using MulIOpLowering = BinaryOpLowering<rair::MulIOp, arith::MulIOp>;
+// using DivSIOpLowering = BinaryOpLowering<rair::DivSIOp, arith::DivSIOp>;
+// using DivUIOpLowering = BinaryOpLowering<rair::DivUIOp, arith::DivUIOp>;
 
 //===----------------------------------------------------------------------===//
 // ToArith ConversionPattern: LoweredUnaryOp 
@@ -2075,21 +2075,21 @@ struct UnaryOpLowering : public ConversionPattern {
     return success();
   }
 };
-using NegFOpLowering = UnaryOpLowering<rocc::NegFOp, arith::NegFOp>;
+using NegFOpLowering = UnaryOpLowering<rair::NegFOp, arith::NegFOp>;
 
 //===----------------------------------------------------------------------===//
 // CmpIOpLowering
 //===----------------------------------------------------------------------===//
 struct CmpIOpLowering : public ConversionPattern {
   CmpIOpLowering(MLIRContext *ctx)
-      : ConversionPattern(rocc::CmpIOp::getOperationName(), 1, ctx) {}
+      : ConversionPattern(rair::CmpIOp::getOperationName(), 1, ctx) {}
 
   LogicalResult
   matchAndRewrite(Operation *op, ArrayRef<Value> operands,
                   ConversionPatternRewriter &rewriter) const final {
     auto loc = op->getLoc();
-    rocc::CmpIOpAdaptor adaptor(operands);
-    auto cmpOp = cast<rocc::CmpIOp>(op);
+    rair::CmpIOpAdaptor adaptor(operands);
+    auto cmpOp = cast<rair::CmpIOp>(op);
 
     // Get predicate attribute and map to arith comparison predicate
     auto predAttr = cmpOp.getPredicateAttr();
@@ -2172,14 +2172,14 @@ struct CmpIOpLowering : public ConversionPattern {
 
 struct CmpFOpLowering : public ConversionPattern {
   CmpFOpLowering(MLIRContext *ctx)
-      : ConversionPattern(rocc::CmpFOp::getOperationName(), 1, ctx) {}
+      : ConversionPattern(rair::CmpFOp::getOperationName(), 1, ctx) {}
 
   LogicalResult
   matchAndRewrite(Operation *op, ArrayRef<Value> operands,
                   ConversionPatternRewriter &rewriter) const final {
     auto loc = op->getLoc();
-    rocc::CmpFOpAdaptor adaptor(operands);
-    auto cmpOp = cast<rocc::CmpFOp>(op);
+    rair::CmpFOpAdaptor adaptor(operands);
+    auto cmpOp = cast<rair::CmpFOp>(op);
 
     // Get predicate attribute and map to arith comparison predicate
     auto predAttr = cmpOp.getPredicateAttr();
@@ -2266,15 +2266,15 @@ struct CmpFOpLowering : public ConversionPattern {
 //===----------------------------------------------------------------------===//
 struct ReshapeOpLowering : public ConversionPattern {
   ReshapeOpLowering(MLIRContext *ctx)
-      : ConversionPattern(rocc::ReshapeOp::getOperationName(), 1, ctx) {}
+      : ConversionPattern(rair::ReshapeOp::getOperationName(), 1, ctx) {}
 
   LogicalResult
   matchAndRewrite(Operation *op, ArrayRef<Value> operands,
                   ConversionPatternRewriter &rewriter) const final {
 
     auto loc = op->getLoc();
-    rocc::ReshapeOpAdaptor adaptor(operands);
-    rocc::ReshapeOp reshapeOp = llvm::cast<rocc::ReshapeOp>(op);
+    rair::ReshapeOpAdaptor adaptor(operands);
+    rair::ReshapeOp reshapeOp = llvm::cast<rair::ReshapeOp>(op);
 
     Value src = adaptor.getSource();
     Value shape = adaptor.getShape();
@@ -2296,7 +2296,7 @@ struct ReshapeOpLowering : public ConversionPattern {
 
 struct Conv2DOpLowering : public ConversionPattern {
   Conv2DOpLowering(MLIRContext *ctx)
-      : ConversionPattern(rocc::Conv2DOp::getOperationName(), 1, ctx) {}
+      : ConversionPattern(rair::Conv2DOp::getOperationName(), 1, ctx) {}
 
   LogicalResult
   matchAndRewrite(Operation *op, ArrayRef<Value> operands,
@@ -2308,7 +2308,7 @@ struct Conv2DOpLowering : public ConversionPattern {
     auto outputMem = convertTensorToMemRef(output);
     auto alloc = insertAllocAndDealloc(outputMem, loc, rewriter);
 
-    rocc::Conv2DOpAdaptor conv2dAdaptor(operands);
+    rair::Conv2DOpAdaptor conv2dAdaptor(operands);
     Value input = conv2dAdaptor.getInput();
     Value kernel = conv2dAdaptor.getKernel();
     // Value bias = conv2dAdaptor.getBias();
@@ -2455,12 +2455,12 @@ struct Conv2DOpLowering : public ConversionPattern {
 class LaunchOpLowering : public ConversionPattern {
 public:
   explicit LaunchOpLowering(MLIRContext *context)
-      : ConversionPattern(rocc::LaunchOp::getOperationName(), 1, context) {}
+      : ConversionPattern(rair::LaunchOp::getOperationName(), 1, context) {}
 
   LogicalResult
   matchAndRewrite(Operation *op, ArrayRef<Value> operands,
                   ConversionPatternRewriter &rewriter) const override {
-    rocc::LaunchOp launch = cast<rocc::LaunchOp>(op);
+    rair::LaunchOp launch = cast<rair::LaunchOp>(op);
 
     std::string launch_name("launch");
     if (auto attr =
@@ -2471,7 +2471,7 @@ public:
     auto c0 = rewriter.create<arith::ConstantIndexOp>(op->getLoc(), 0);
     auto c1 = rewriter.create<arith::ConstantIndexOp>(op->getLoc(), 1);
 
-    // make scf.parallel to replace rocc.launch
+    // make scf.parallel to replace rair.launch
     for (auto d : launch.getSizeOperands()) {
       lbs.push_back(c0);
       ubs.push_back(d);
@@ -2507,16 +2507,16 @@ public:
     for (auto bi = launchOps.begin(), be = --launchOps.end(); bi != be; ++bi)
       rewriter.clone(*bi, remap);
 
-    // replace output events with rocc.wait_all
+    // replace output events with rair.wait_all
     if (op->getNumResults()) {
       SmallVector<Value> asyncDeps = launch.getAsyncDependencies();
       SmallVector<Value> deps = asyncDeps;
       for (auto &o : operands)
-        if (llvm::isa<rocc::EventType>(o.getType()))
+        if (llvm::isa<rair::EventType>(o.getType()))
           deps.push_back(o);
       rewriter.setInsertionPoint(scfPar);
-      rewriter.replaceOpWithNewOp<rocc::WaitAllOp>(
-          op, rocc::EventType::get(op->getContext()), deps);
+      rewriter.replaceOpWithNewOp<rair::WaitAllOp>(
+          op, rair::EventType::get(op->getContext()), deps);
     } else
       rewriter.eraseOp(launch);
 
@@ -2532,7 +2532,7 @@ LogicalResult lowerLoad(Operation *op, PatternRewriter &rewriter,
   auto ctx = op->getContext();
   auto loc = op->getLoc();
 
-  auto dmaOp = cast<rocc::LoadDrvOp>(op); 
+  auto dmaOp = cast<rair::LoadDrvOp>(op); 
   SmallVector<Type, 6> tys;
   SmallVector<Value, 16> operands;
 
@@ -2707,16 +2707,16 @@ LogicalResult ScfParToAffineForConversion(Operation *op) {
 //===----------------------------------------------------------------------===//
 // ToAffine RewritePatterns: GMEMAllocOpConversion
 //===----------------------------------------------------------------------===//
-class GMEMAllocOpConversion : public OpConversionPattern<rocc::AllocOp> {
+class GMEMAllocOpConversion : public OpConversionPattern<rair::AllocOp> {
 public:
-  using OpConversionPattern<rocc::AllocOp>::OpConversionPattern;
+  using OpConversionPattern<rair::AllocOp>::OpConversionPattern;
 
   LogicalResult
-  matchAndRewrite(rocc::AllocOp op, OpAdaptor adaptor,
+  matchAndRewrite(rair::AllocOp op, OpAdaptor adaptor,
                   ConversionPatternRewriter &rewriter) const override {
 
     auto memrefTy = op.getType();
-    if (op.getType().getMemorySpaceAsInt() != (int)rocc::MemorySpace::GMEM)
+    if (op.getType().getMemorySpaceAsInt() != (int)rair::MemorySpace::GMEM)
       return failure();
 
     auto alloc = rewriter.create<memref::AllocOp>(
@@ -2730,16 +2730,16 @@ public:
 //===----------------------------------------------------------------------===//
 // ToAffine RewritePatterns:GMEMDeallocOpConversion
 //===----------------------------------------------------------------------===//
-class GMEMDeallocOpConversion : public OpConversionPattern<rocc::DeallocOp> {
+class GMEMDeallocOpConversion : public OpConversionPattern<rair::DeallocOp> {
 public:
-  using OpConversionPattern<rocc::DeallocOp>::OpConversionPattern;
+  using OpConversionPattern<rair::DeallocOp>::OpConversionPattern;
 
   LogicalResult
-  matchAndRewrite(rocc::DeallocOp op, OpAdaptor adaptor,
+  matchAndRewrite(rair::DeallocOp op, OpAdaptor adaptor,
                   ConversionPatternRewriter &rewriter) const override {
 
     auto memrefTy = llvm::cast<MemRefType>(op.getMemref().getType());
-    if (memrefTy.getMemorySpaceAsInt() != (int)rocc::MemorySpace::GMEM)
+    if (memrefTy.getMemorySpaceAsInt() != (int)rair::MemorySpace::GMEM)
       return failure();
 
     rewriter.create<memref::DeallocOp>(op.getLoc(), adaptor.getMemref());
@@ -2751,12 +2751,12 @@ public:
 //===----------------------------------------------------------------------===//
 // ToLLVMFunc RewritePatterns: WaitAll operations
 //===----------------------------------------------------------------------===//
-class WaitAllOpLoweringToAsync : public OpConversionPattern<rocc::WaitAllOp> {
+class WaitAllOpLoweringToAsync : public OpConversionPattern<rair::WaitAllOp> {
 public:
-  using OpConversionPattern<rocc::WaitAllOp>::OpConversionPattern;
+  using OpConversionPattern<rair::WaitAllOp>::OpConversionPattern;
 
   LogicalResult
-  matchAndRewrite(rocc::WaitAllOp op, OpAdaptor adaptor,
+  matchAndRewrite(rair::WaitAllOp op, OpAdaptor adaptor,
                   ConversionPatternRewriter &rewriter) const override {
     SmallVector<Value, 8> operands{adaptor.getOperands()};
 
@@ -2794,11 +2794,11 @@ public:
 // RISCVToAffine RewritePatterns: Func operations
 //===----------------------------------------------------------------------===//
 
-struct FuncOpLowering : public OpConversionPattern<rocc::FuncOp> {
-  using OpConversionPattern<rocc::FuncOp>::OpConversionPattern;
+struct FuncOpLowering : public OpConversionPattern<rair::FuncOp> {
+  using OpConversionPattern<rair::FuncOp>::OpConversionPattern;
 
   LogicalResult
-  matchAndRewrite(rocc::FuncOp op, OpAdaptor adaptor,
+  matchAndRewrite(rair::FuncOp op, OpAdaptor adaptor,
                   ConversionPatternRewriter &rewriter) const final {
     // We only lower the main function as we expect that all other functions
     // have been inlined.
@@ -2824,17 +2824,17 @@ struct FuncOpLowering : public OpConversionPattern<rocc::FuncOp> {
 // RISCVToAffine RewritePatterns: Return operations
 //===----------------------------------------------------------------------===//
 
-struct ReturnOpLowering : public OpRewritePattern<rocc::ReturnOp> {
-  using OpRewritePattern<rocc::ReturnOp>::OpRewritePattern;
+struct ReturnOpLowering : public OpRewritePattern<rair::ReturnOp> {
+  using OpRewritePattern<rair::ReturnOp>::OpRewritePattern;
 
-  LogicalResult matchAndRewrite(rocc::ReturnOp op,
+  LogicalResult matchAndRewrite(rair::ReturnOp op,
                                 PatternRewriter &rewriter) const final {
     // During this lowering, we expect that all function calls have been
     // inlined.
     if (op.hasOperand())
       return failure();
 
-    // We lower "rocc.return" directly to "func.return".
+    // We lower "rair.return" directly to "func.return".
     rewriter.replaceOpWithNewOp<func::ReturnOp>(op);
     return success();
   }
@@ -2843,10 +2843,10 @@ struct ReturnOpLowering : public OpRewritePattern<rocc::ReturnOp> {
 // RISCVToAffine RewritePatterns: Constant operations
 //===----------------------------------------------------------------------===//
 
-// struct RISCVConstantOpLowering : public OpRewritePattern<rocc::ConstantOp> {
-//   using OpRewritePattern<rocc::ConstantOp>::OpRewritePattern;
+// struct RISCVConstantOpLowering : public OpRewritePattern<rair::ConstantOp> {
+//   using OpRewritePattern<rair::ConstantOp>::OpRewritePattern;
 
-//   LogicalResult matchAndRewrite(rocc::ConstantOp op,
+//   LogicalResult matchAndRewrite(rair::ConstantOp op,
 //                                 PatternRewriter &rewriter) const final {
 //     ::mlir::ElementsAttr constantValue = op.getValue();
 //     Location loc = op.getLoc();
@@ -2931,17 +2931,17 @@ struct ArithScalarConstantOpLowering
   }
 };
 namespace {
-class ROCCToAffineLowerPass
-    : public mlir::PassWrapper<ROCCToAffineLowerPass,
+class RAIRToAffineLowerPass
+    : public mlir::PassWrapper<RAIRToAffineLowerPass,
                                mlir::OperationPass<mlir::ModuleOp>> {
 public:
   StringRef getArgument() const final { 
-    return "convert-rocc-to-affine"; 
+    return "convert-rair-to-affine"; 
   }
   StringRef getDescription() const final {
-    return "Lower ROCC dialect operations to Affine dialect";
+    return "Lower RAIR dialect operations to Affine dialect";
   }
-  MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(ROCCToAffineLowerPass)
+  MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(RAIRToAffineLowerPass)
 
   void getDependentDialects(mlir::DialectRegistry &registry) const override {
     registry.insert<mlir::affine::AffineDialect, mlir::func::FuncDialect,
@@ -2953,19 +2953,19 @@ public:
 };
 } // namespace
 
-void ROCCToAffineLowerPass::runOnOperation() {
+void RAIRToAffineLowerPass::runOnOperation() {
   ModuleOp module = getOperation();
   MLIRContext *context = &getContext();
   mlir::TypeConverter typeConverter;
 
   mlir::ConversionTarget target(getContext());
 
-  target.addIllegalDialect<rocc::ROCCDialect>();
+  target.addIllegalDialect<rair::RAIRDialect>();
   target.addLegalDialect<mlir::affine::AffineDialect, mlir::BuiltinDialect,
                          mlir::func::FuncDialect, mlir::arith::ArithDialect,
                          mlir::memref::MemRefDialect, mlir::scf::SCFDialect,
                          async::AsyncDialect>();
-  target.addDynamicallyLegalOp<rocc::PrintOp>([](rocc::PrintOp op) {
+  target.addDynamicallyLegalOp<rair::PrintOp>([](rair::PrintOp op) {
     return llvm::none_of(op->getOperandTypes(), [](mlir::Type type) {
       return mlir::isa<mlir::TensorType>(type);
     });
@@ -2973,7 +2973,7 @@ void ROCCToAffineLowerPass::runOnOperation() {
   target.addDynamicallyLegalOp<mlir::arith::ConstantOp>([](mlir::arith::ConstantOp op) {
     return !mlir::isa<mlir::TensorType>(op.getType());
   });
-  target.addLegalOp<rocc::WorldOp,arith::ConstantOp>();
+  target.addLegalOp<rair::WorldOp,arith::ConstantOp>();
 
     // Add type converter
   typeConverter.addConversion([](mlir::Type type) { return type; });
@@ -3021,9 +3021,9 @@ void ROCCToAffineLowerPass::runOnOperation() {
 }
 
 
-namespace rocc{
+namespace rair{
   std::unique_ptr<mlir::Pass> createLowerToAffinePass() {
-    return std::make_unique<ROCCToAffineLowerPass>();
+    return std::make_unique<RAIRToAffineLowerPass>();
   }
 }
 

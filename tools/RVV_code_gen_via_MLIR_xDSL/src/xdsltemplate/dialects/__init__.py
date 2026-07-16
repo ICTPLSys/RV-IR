@@ -14,7 +14,7 @@ def get_all_dialects() -> dict[str, Callable[[], Dialect]]:
         "emitc_ptr": lambda: emitc_ptr.EmitC_Ptr,
         "gemm": lambda: gemm.GEMM,
         "hello": lambda: hello.Hello,
-        "rocc": lambda: riscv.ROCC,
+        "rair": lambda: riscv.RAIR,
         "riscv": lambda: riscv.RISCV,
         "riscv_bpi": lambda: riscv_bpi.RISCV_BPI,
         "rvv": lambda: rvv.RVV,

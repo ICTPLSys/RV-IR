@@ -42,11 +42,11 @@
 
 #include <iostream>
 using namespace mlir;
-namespace rocc{
+namespace rair{
 class PrintOpLowering : public mlir::ConversionPattern {
 public:
   explicit PrintOpLowering(mlir::MLIRContext *context)
-      : mlir::ConversionPattern(rocc::PrintOp::getOperationName(), 1,
+      : mlir::ConversionPattern(rair::PrintOp::getOperationName(), 1,
                                 context) {}
 
   mlir::LogicalResult
@@ -132,7 +132,7 @@ public:
     }
 
     // Generate a call to printf for the current element of the loop.
-    auto printOp = mlir::cast<rocc::PrintOp>(op);
+    auto printOp = mlir::cast<rair::PrintOp>(op);
     auto elementLoad =
         rewriter.create<mlir::memref::LoadOp>(loc, printOp.getInput(), loopIvs);
     
@@ -231,7 +231,7 @@ private:
 class WorldOpLowering : public mlir::ConversionPattern {
 public:
   explicit WorldOpLowering(mlir::MLIRContext *context)
-      : mlir::ConversionPattern(rocc::WorldOp::getOperationName(), 1,
+      : mlir::ConversionPattern(rair::WorldOp::getOperationName(), 1,
                                 context) {}
 
   mlir::LogicalResult
@@ -241,12 +241,12 @@ public:
     mlir::ModuleOp parentModule = op->getParentOfType<mlir::ModuleOp>();
     auto printfRef = getOrInsertPrintf(rewriter, parentModule);
     auto loc = op->getLoc();
-    mlir::Value roccWorld = getOrCreateGlobalString(
-        loc, rewriter, "rocc_word_string",
-        mlir::StringRef("ROCC, World! \n\0", 15), parentModule);
+    mlir::Value rairWorld = getOrCreateGlobalString(
+        loc, rewriter, "rair_word_string",
+        mlir::StringRef("RAIR, World! \n\0", 15), parentModule);
 
     rewriter.create<mlir::LLVM::CallOp>(loc, getPrintfType(context),
-                                        printfRef, roccWorld);
+                                        printfRef, rairWorld);
     rewriter.eraseOp(op);
     return mlir::success();
   }
@@ -305,20 +305,20 @@ private:
 
   }
 };
-} // namespace rocc
+} // namespace rair
 
 namespace {
-class ROCCToLLVMLoweringPass
-    : public mlir::PassWrapper<ROCCToLLVMLoweringPass,
+class RAIRToLLVMLoweringPass
+    : public mlir::PassWrapper<RAIRToLLVMLoweringPass,
                                mlir::OperationPass<mlir::ModuleOp>> {
 public:
   StringRef getArgument() const final { 
-    return "convert-rocc-to-llvm"; 
+    return "convert-rair-to-llvm"; 
   }
   StringRef getDescription() const final {
-    return "Lower ROCC dialect operations to LLVM dialect";
+    return "Lower RAIR dialect operations to LLVM dialect";
   }
-  MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(ROCCToLLVMLoweringPass)
+  MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(RAIRToLLVMLoweringPass)
   void getDependentDialects(mlir::DialectRegistry &registry) const override {
     registry.insert<mlir::LLVM::LLVMDialect, mlir::scf::SCFDialect,
                     mlir::cf::ControlFlowDialect>();
@@ -328,7 +328,7 @@ public:
 };
 } // namespace
 
-void ROCCToLLVMLoweringPass::runOnOperation() {
+void RAIRToLLVMLoweringPass::runOnOperation() {
   mlir::LLVMConversionTarget target(getContext());
   target.addLegalOp<mlir::ModuleOp>();
 
@@ -344,7 +344,7 @@ void ROCCToLLVMLoweringPass::runOnOperation() {
                                                         patterns);
   populateFuncToLLVMConversionPatterns(typeConverter, patterns);
 
-  patterns.add<rocc::PrintOpLowering, rocc::WorldOpLowering>(&getContext());
+  patterns.add<rair::PrintOpLowering, rair::WorldOpLowering>(&getContext());
 
   auto module = getOperation();
   if (failed(applyFullConversion(module, target, std::move(patterns)))) {
@@ -352,11 +352,11 @@ void ROCCToLLVMLoweringPass::runOnOperation() {
   }
 }
 
-// std::unique_ptr<mlir::Pass> rocc::createLowerToLLVMPass() {
-//   return std::make_unique<ROCCToLLVMLoweringPass>();
+// std::unique_ptr<mlir::Pass> rair::createLowerToLLVMPass() {
+//   return std::make_unique<RAIRToLLVMLoweringPass>();
 // }
-namespace rocc {
+namespace rair {
   std::unique_ptr<mlir::Pass> createLowerToLLVMPass() {
-    return std::make_unique<ROCCToLLVMLoweringPass>(); 
+    return std::make_unique<RAIRToLLVMLoweringPass>(); 
   }
 }

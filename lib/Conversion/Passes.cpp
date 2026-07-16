@@ -52,25 +52,25 @@ namespace {
 
 } // end namespace
 
-namespace rocc {
-void registerROCCConversionPasses() {
+namespace rair {
+void registerRAIRConversionPasses() {
   // 注册RISCV相关的转换Pass
-  registerConvertLinalgToROCCPass();  
-  registerConvertROCCToAffinePass(); 
-  registerConvertROCCToLLVMPass();   
+  registerConvertLinalgToRAIRPass();  
+  registerConvertRAIRToAffinePass(); 
+  registerConvertRAIRToLLVMPass();   
 }
-} // namespace rocc
+} // namespace rair
 
 
 namespace cim {
 void registerCIMConversionPasses() {  
-  registerConvertROCCToCIMPass();  
+  registerConvertRAIRToCIMPass();  
   registerConvertCIMToLLVMPass();  
 }
 } // namespace cim
 
 void mlir::torch::registerConversionPasses() { 
-    rocc::registerROCCConversionPasses();  
+    rair::registerRAIRConversionPasses();  
     cim::registerCIMConversionPasses();  
     ::registerPasses(); 
 }

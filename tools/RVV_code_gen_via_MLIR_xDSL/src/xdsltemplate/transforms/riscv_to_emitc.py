@@ -1,7 +1,7 @@
 """
-Convert RoCC dialect operations to EmitC (batch GEMM, 2-D matmul, transpose).
+Convert RAIR dialect operations to EmitC (batch GEMM, 2-D matmul, transpose).
 
-``RISCVToEmitCPass`` is an alias of ``RoCCToEmitCPass`` for backward compatibility.
+``RISCVToEmitCPass`` is an alias of ``RAIRToEmitCPass`` for backward compatibility.
 """
 
 from xdsl.context import Context
@@ -46,7 +46,7 @@ def get_pointer_from_value(value: SSAValue, rewriter: PatternRewriter) -> SSAVal
 
         raise ValueError(
             f"Memref value {value} does not have a pointer cast. "
-            "Ensure memref-to-emitc pass runs before rocc-to-emitc."
+            "Ensure memref-to-emitc pass runs before rair-to-emitc."
         )
 
     return value
@@ -59,7 +59,7 @@ def _rewrite_batch_like_gemm(op: BatchMatmulOp | MatmulOp, rewriter: PatternRewr
     if not isinstance(A_type, MemRefType):
         raise ValueError(
             f"Expected memref type for operand A, got {A_type}. "
-            "Ensure rocc.batch_matmul / rocc.matmul is used before memref-to-emitc conversion."
+            "Ensure rair.batch_matmul / rair.matmul is used before memref-to-emitc conversion."
         )
 
     A_shape = A_type.shape.data
@@ -135,7 +135,7 @@ def _rewrite_batch_like_gemm(op: BatchMatmulOp | MatmulOp, rewriter: PatternRewr
 
 
 class ConvertBatchMatmulToEmitC(RewritePattern):
-    """Convert ``rocc.batch_matmul`` to ``emitc.call_opaque`` calling ``gemm_operator``."""
+    """Convert ``rair.batch_matmul`` to ``emitc.call_opaque`` calling ``gemm_operator``."""
 
     @op_type_rewrite_pattern
     def match_and_rewrite(self, op: BatchMatmulOp, rewriter: PatternRewriter):
@@ -143,7 +143,7 @@ class ConvertBatchMatmulToEmitC(RewritePattern):
 
 
 class ConvertMatmulToEmitC(RewritePattern):
-    """Convert ``rocc.matmul`` to the same ``gemm_operator`` lowering as batch matmul."""
+    """Convert ``rair.matmul`` to the same ``gemm_operator`` lowering as batch matmul."""
 
     @op_type_rewrite_pattern
     def match_and_rewrite(self, op: MatmulOp, rewriter: PatternRewriter):
@@ -151,7 +151,7 @@ class ConvertMatmulToEmitC(RewritePattern):
 
 
 class ConvertTransposeToEmitC(RewritePattern):
-    """Convert ``rocc.transpose`` to ``transpose_operator``."""
+    """Convert ``rair.transpose`` to ``transpose_operator``."""
 
     @op_type_rewrite_pattern
     def match_and_rewrite(self, op: TransposeOp, rewriter: PatternRewriter):
@@ -161,7 +161,7 @@ class ConvertTransposeToEmitC(RewritePattern):
         if not isinstance(input_type, MemRefType):
             raise ValueError(
                 f"Expected memref type for transpose operand input, got {input_type}. "
-                "Ensure rocc.transpose is used before memref-to-emitc conversion."
+                "Ensure rair.transpose is used before memref-to-emitc conversion."
             )
 
         input_shape = input_type.shape.data
@@ -235,10 +235,10 @@ class ConvertTransposeToEmitC(RewritePattern):
         rewriter.replace_op(op, transpose_call)
 
 
-class RoCCToEmitCPass(ModulePass):
-    """Convert all RoCC dialect operations to EmitC."""
+class RAIRToEmitCPass(ModulePass):
+    """Convert all RAIR dialect operations to EmitC."""
 
-    name = "rocc_to_emitc"
+    name = "rair-to-emitc"
 
     def apply(self, ctx: Context, op: ModuleOp) -> None:
         patterns = [
@@ -250,4 +250,4 @@ class RoCCToEmitCPass(ModulePass):
             PatternRewriteWalker(pattern, apply_recursively=True).rewrite_module(op)
 
 
-RISCVToEmitCPass = RoCCToEmitCPass
+RISCVToEmitCPass = RAIRToEmitCPass

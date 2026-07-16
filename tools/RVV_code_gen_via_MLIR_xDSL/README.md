@@ -25,8 +25,8 @@ That’s it. The script will:
 
 Example with explicit connection and tuning options:
 ```bash
-./convert_linalg_mlir_to_c.sh tests/riscv_tests/mnist_rocc_memref.mlir --wd 16 --type fp
-./convert_linalg_mlir_to_c.sh tests/riscv_tests/resnet_rocc_memref.mlir --wd 16 --type fp
+./convert_linalg_mlir_to_c.sh tests/riscv_tests/mnist_rair_memref.mlir --wd 16 --type fp
+./convert_linalg_mlir_to_c.sh tests/riscv_tests/resnet_rair_memref.mlir --wd 16 --type fp
 ```
 
 ## Outputs

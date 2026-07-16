@@ -24,7 +24,7 @@
 
 namespace cim {
     // std::unique_ptr<mlir::Pass> createLowerToAffinePass();
-    std::unique_ptr<mlir::Pass> createROCCLowerToCIMPass();
+    std::unique_ptr<mlir::Pass> createRAIRLowerToCIMPass();
     std::unique_ptr<mlir::Pass> createCIMLowerToLLVMPass();
 } // namespace cim
 

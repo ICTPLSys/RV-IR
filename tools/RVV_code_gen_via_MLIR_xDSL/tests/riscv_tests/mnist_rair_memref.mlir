@@ -21,15 +21,15 @@ module attributes {torch.debug_module_name = "MnistNet"} {
     %alloc_6 = memref.alloc() {alignment = 64 : i64} : memref<2x2xf32>
     %alloc_7 = memref.alloc() {alignment = 64 : i64} : memref<1x1x14x14xf32>
     memref.copy %alloc_5, %alloc_7 : memref<1x1x14x14xf32> to memref<1x1x14x14xf32>
-    rocc.pooling_nchw_max {dilations = dense<1> : vector<2xi64>, strides = dense<2> : vector<2xi64>} ins(%arg0, %alloc_6 : memref<1x1x28x28xf32, strided<[?, ?, ?, ?], offset: ?>>, memref<2x2xf32>) outs(%alloc_7 : memref<1x1x14x14xf32>)
+    rair.pooling_nchw_max {dilations = dense<1> : vector<2xi64>, strides = dense<2> : vector<2xi64>} ins(%arg0, %alloc_6 : memref<1x1x28x28xf32, strided<[?, ?, ?, ?], offset: ?>>, memref<2x2xf32>) outs(%alloc_7 : memref<1x1x14x14xf32>)
     %collapse_shape = memref.collapse_shape %alloc_7 [[0], [1, 2, 3]] : memref<1x1x14x14xf32> into memref<1x196xf32>
     %alloc_8 = memref.alloc() {alignment = 64 : i64} : memref<196x32xf32>
-    rocc.transpose ins(%alloc_2 : memref<32x196xf32>) outs(%alloc_8 : memref<196x32xf32>) {permutation = array<i64: 1, 0>}
+    rair.transpose ins(%alloc_2 : memref<32x196xf32>) outs(%alloc_8 : memref<196x32xf32>) {permutation = array<i64: 1, 0>}
     %alloc_9 = memref.alloc() {alignment = 64 : i64} : memref<1x32xf32>
     linalg.fill ins(%cst : f32) outs(%alloc_9 : memref<1x32xf32>)
     %alloc_10 = memref.alloc() {alignment = 64 : i64} : memref<1x32xf32>
     memref.copy %alloc_9, %alloc_10 : memref<1x32xf32> to memref<1x32xf32>
-    rocc.matmul ins(%collapse_shape, %alloc_8 : memref<1x196xf32>, memref<196x32xf32>) outs(%alloc_10 : memref<1x32xf32>)
+    rair.matmul ins(%collapse_shape, %alloc_8 : memref<1x196xf32>, memref<196x32xf32>) outs(%alloc_10 : memref<1x32xf32>)
     %alloc_11 = memref.alloc() {alignment = 64 : i64} : memref<1x32xf32>
     linalg.generic {indexing_maps = [#map, #map1, #map], iterator_types = ["parallel", "parallel"]} ins(%alloc_10, %alloc : memref<1x32xf32>, memref<32xf32>) outs(%alloc_11 : memref<1x32xf32>) {
     ^bb0(%in: f32, %in_26: f32, %out: f32):
@@ -44,12 +44,12 @@ module attributes {torch.debug_module_name = "MnistNet"} {
       linalg.yield %1 : f32
     }
     %alloc_13 = memref.alloc() {alignment = 64 : i64} : memref<32x10xf32>
-    rocc.transpose ins(%alloc_4 : memref<10x32xf32>) outs(%alloc_13 : memref<32x10xf32>) {permutation = array<i64: 1, 0>}
+    rair.transpose ins(%alloc_4 : memref<10x32xf32>) outs(%alloc_13 : memref<32x10xf32>) {permutation = array<i64: 1, 0>}
     %alloc_14 = memref.alloc() {alignment = 64 : i64} : memref<1x10xf32>
     linalg.fill ins(%cst : f32) outs(%alloc_14 : memref<1x10xf32>)
     %alloc_15 = memref.alloc() {alignment = 64 : i64} : memref<1x10xf32>
     memref.copy %alloc_14, %alloc_15 : memref<1x10xf32> to memref<1x10xf32>
-    rocc.matmul ins(%alloc_12, %alloc_13 : memref<1x32xf32>, memref<32x10xf32>) outs(%alloc_15 : memref<1x10xf32>)
+    rair.matmul ins(%alloc_12, %alloc_13 : memref<1x32xf32>, memref<32x10xf32>) outs(%alloc_15 : memref<1x10xf32>)
     %alloc_16 = memref.alloc() {alignment = 64 : i64} : memref<1x10xf32>
     linalg.generic {indexing_maps = [#map, #map1, #map], iterator_types = ["parallel", "parallel"]} ins(%alloc_15, %alloc_3 : memref<1x10xf32>, memref<10xf32>) outs(%alloc_16 : memref<1x10xf32>) {
     ^bb0(%in: f32, %in_26: f32, %out: f32):

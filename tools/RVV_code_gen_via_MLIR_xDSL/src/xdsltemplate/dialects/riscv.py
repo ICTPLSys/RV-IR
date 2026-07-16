@@ -1,8 +1,8 @@
 """
-RoCC dialect for accelerator-side memref ops (batch GEMM, 2-D matmul, transpose).
+RAIR dialect for accelerator-side memref ops (batch GEMM, 2-D matmul, transpose).
 
-MLIR operation names use the ``rocc.`` prefix. ``RISCV`` is kept as an alias of
-``ROCC`` for older imports.
+MLIR operation names use the ``rair.`` prefix. ``RISCV`` is kept as an alias of
+``RAIR`` for older imports.
 """
 
 from xdsl.dialects.builtin import (
@@ -25,13 +25,13 @@ class BatchMatmulOp(IRDLOperation):
     """
     Batched matrix multiplication.
 
-    Custom syntax: rocc.batch_matmul ins(%A, %B : memref<...>, memref<...>) outs(%C : memref<...>)
+    Custom syntax: rair.batch_matmul ins(%A, %B : memref<...>, memref<...>) outs(%C : memref<...>)
 
     Performs batched matrix multiplication: C[batch] = A[batch] @ B[batch]
     where A is (batch, M, K), B is (batch, K, N), C is (batch, M, N).
     """
 
-    name = "rocc.batch_matmul"
+    name = "rair.batch_matmul"
 
     A = operand_def(MemRefType)
     B = operand_def(MemRefType)
@@ -75,10 +75,10 @@ class MatmulOp(IRDLOperation):
     """
     Two-operand matrix multiply (same operand layout as batch matmul, 2-D friendly).
 
-    Custom syntax: rocc.matmul ins(%A, %B : memref<...>, memref<...>) outs(%C : memref<...>)
+    Custom syntax: rair.matmul ins(%A, %B : memref<...>, memref<...>) outs(%C : memref<...>)
     """
 
-    name = "rocc.matmul"
+    name = "rair.matmul"
 
     A = operand_def(MemRefType)
     B = operand_def(MemRefType)
@@ -123,11 +123,11 @@ class TransposeOp(IRDLOperation):
     Tensor transpose with an explicit permutation attribute.
 
     Example:
-      rocc.transpose ins(%input : memref<1x128x8x64xf32>) outs(%output : memref<1x8x128x64xf32>)
+      rair.transpose ins(%input : memref<1x128x8x64xf32>) outs(%output : memref<1x8x128x64xf32>)
                    {permutation = array<i64: 0, 2, 1, 3>}
     """
 
-    name = "rocc.transpose"
+    name = "rair.transpose"
 
     input = operand_def(MemRefType)
     output = operand_def(MemRefType)
@@ -143,8 +143,8 @@ class TransposeOp(IRDLOperation):
         )
 
 
-ROCC = Dialect(
-    "rocc",
+RAIR = Dialect(
+    "rair",
     [
         BatchMatmulOp,
         MatmulOp,
@@ -153,4 +153,4 @@ ROCC = Dialect(
     [],
 )
 
-RISCV = ROCC
+RISCV = RAIR

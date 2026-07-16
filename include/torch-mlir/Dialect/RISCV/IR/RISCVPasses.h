@@ -22,11 +22,11 @@
 
 #include "mlir/Pass/Pass.h"
 
-namespace rocc {
+namespace rair {
 // std::unique_ptr<mlir::Pass> createShapeInferencePass();  //形状推断pass
     std::unique_ptr<mlir::Pass> createLowerToAffinePass();
     std::unique_ptr<mlir::Pass> createLowerToLLVMPass();
-    // std::unique_ptr<mlir::Pass> createLowerLinalgToROCCPass();
-} // namespace rocc
+    // std::unique_ptr<mlir::Pass> createLowerLinalgToRAIRPass();
+} // namespace rair
 
 #endif // MLIR_RISCV_PASSES_H

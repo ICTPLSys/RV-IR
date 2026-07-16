@@ -26,8 +26,8 @@ def get_all_passes() -> dict[str, Callable[[], type[ModulePass]]]:
         "memref-load-to-emitc": lambda: memref_load_to_emitc.MemrefLoadToEmitcPass,
         "memref-store-to-emitc": lambda: memref_store_to_emitc.MemrefStoreToEmitcPass,
         "memref-to-emitc": lambda: memref_to_emitc.MemRefToEmitCPass,
-        "rocc-to-emitc": lambda: riscv_to_emitc.RoCCToEmitCPass,
-        "riscv-to-emitc": lambda: riscv_to_emitc.RoCCToEmitCPass,
+        "rair-to-emitc": lambda: riscv_to_emitc.RAIRToEmitCPass,
+        "riscv-to-emitc": lambda: riscv_to_emitc.RAIRToEmitCPass,
         "rvv-to-emitc": lambda: rvv_to_emitc.RVVToEmitCPass,
         "scf-to-emitc": lambda: scf_to_emitc.SCFToEmitCPass,
     }

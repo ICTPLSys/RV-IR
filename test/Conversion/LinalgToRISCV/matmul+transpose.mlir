@@ -1,6 +1,22 @@
-//RUN: torch-mlir-opt <%s -convert-linalg-to-rocc | FileCheck %s
-// CHECK: rocc.transpose
-// CHECK: rocc.matmul
+//RUN: torch-mlir-opt <%s -convert-linalg-to-rair | FileCheck %s
+// CHECK: %[[CTX:.*]] = rair.acquire {accelerator = "default"} : !rair.context
+// CHECK: rair.alloc
+// CHECK: rair.transpose
+// CHECK: rair.alloc
+// CHECK: rair.alloc
+// CHECK: rair.transfer
+// CHECK: rair.alloc_buffer %[[CTX]] {memory_space = "LMEM"}
+// CHECK: rair.alloc_buffer %[[CTX]] {memory_space = "LMEM"}
+// CHECK: rair.alloc_buffer %[[CTX]] {memory_space = "LMEM"}
+// CHECK: rair.transfer {{.*}} {dst_memory_space = "LMEM", src_memory_space = "GMEM"}
+// CHECK: rair.transfer {{.*}} {dst_memory_space = "LMEM", src_memory_space = "GMEM"}
+// CHECK: rair.transfer {{.*}} {dst_memory_space = "LMEM", src_memory_space = "GMEM"}
+// CHECK: rair.matmul
+// CHECK: rair.transfer {{.*}} {dst_memory_space = "GMEM", src_memory_space = "LMEM"}
+// CHECK: rair.dealloc_buffer
+// CHECK: rair.dealloc_buffer
+// CHECK: rair.dealloc_buffer
+// CHECK: rair.release %[[CTX]]
 #map = affine_map<(d0, d1) -> (d0, d1)>
 #map1 = affine_map<(d0, d1) -> (d0, d1)>
 module attributes {torch.debug_module_name = "Linear"} {

@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-RoCC MLIR to C Code Generation Pipeline
+RAIR MLIR to C Code Generation Pipeline
 
-This script converts MLIR files containing rocc.batch_matmul operations to C code
+This script converts MLIR files containing rair.batch_matmul operations to C code
 using the xDSL framework and mlir-translate.
 
 Usage:
@@ -10,7 +10,7 @@ Usage:
 
 Pipeline:
     1. Parse MLIR input file
-    2. Apply RoCC -> EmitC transformation passes
+    2. Apply RAIR -> EmitC transformation passes
     3. Dump transformed MLIR
     4. Generate C code manually from transformed MLIR
 """
@@ -33,8 +33,8 @@ from xdsl.printer import Printer
 
 from xdsltemplate.dialects.emitc_ext import EmitC_Ext
 
-# Import RoCC dialect and transforms
-from xdsltemplate.dialects.riscv import ROCC
+# Import RAIR dialect and transforms
+from xdsltemplate.dialects.riscv import RAIR
 from xdsltemplate.transforms.arith_to_emitc import ArithToEmitCPass
 from xdsltemplate.transforms.memref_load_to_emitc import MemrefLoadToEmitcPass
 from xdsltemplate.transforms.memref_store_to_emitc import MemrefStoreToEmitcPass
@@ -43,7 +43,7 @@ from xdsltemplate.transforms.memref_to_emitc import (
     MemRefToEmitCPass,
     RemoveUnrealizedConversionCasts,
 )
-from xdsltemplate.transforms.riscv_to_emitc import RoCCToEmitCPass
+from xdsltemplate.transforms.riscv_to_emitc import RAIRToEmitCPass
 from xdsltemplate.transforms.scf_to_emitc import SCFToEmitCPass
 
 # ============================================================================
@@ -59,7 +59,7 @@ DEFAULT_MLIR_TRANSLATE = "mlir-translate"  # Assumes it's in PATH
 
 
 class ConvertMemRefFuncSignatures(ModulePass):
-    """Convert memref types to emitc.ptr in function signatures (after rocc-to-emitc)"""
+    """Convert memref types to emitc.ptr in function signatures (after rair-to-emitc)"""
 
     name = "convert-memref-func-sigs"
 
@@ -93,7 +93,7 @@ def process_mlir_file(
     verbose: bool = False,
 ) -> None:
     """
-    Process an MLIR file containing rocc.batch_matmul operations
+    Process an MLIR file containing rair.batch_matmul operations
 
     Args:
         input_file: Path to input MLIR file
@@ -106,7 +106,7 @@ def process_mlir_file(
     # Step 1: Parse MLIR input
     # ================================================================
     if verbose:
-        print("[INFO] RoCC MLIR to C Code Generation Pipeline")
+        print("[INFO] RAIR MLIR to C Code Generation Pipeline")
         print("=" * 70)
         print(f"Input file:     {input_file}")
         print(f"Output file:    {output_file}")
@@ -121,7 +121,7 @@ def process_mlir_file(
     with open(input_file) as f:
         mlir_content = f.read()
 
-    if re.search(r"rocc\.(batch_matmul|transpose).*ins\(", mlir_content):
+    if re.search(r"rair\.(batch_matmul|transpose).*ins\(", mlir_content):
         try:
             import convert_custom_format
 
@@ -136,7 +136,7 @@ def process_mlir_file(
                 mlir_content = f.read()
             os.unlink(tmp_path)
         except Exception as e:
-            print(f"[WARNING] RoCC custom format conversion failed: {e}")
+            print(f"[WARNING] RAIR custom format conversion failed: {e}")
 
     if verbose:
         print("[INFO] Step 1: Parsing MLIR input...")
@@ -150,7 +150,7 @@ def process_mlir_file(
     ctx.load_dialect(scf.Scf)
     ctx.load_dialect(linalg.Linalg)
     ctx.load_dialect(emitc.EmitC)
-    ctx.load_dialect(ROCC)
+    ctx.load_dialect(RAIR)
     ctx.load_dialect(EmitC_Ext)  # Load emitc_ext for emitc.constant operation
 
     # Parse MLIR
@@ -173,7 +173,7 @@ def process_mlir_file(
 
     pass_pipeline = [
         ("memref-to-emitc-casts", MemRefToEmitCPass()),  # Create pointer casts
-        ("rocc-to-emitc", RoCCToEmitCPass()),
+        ("rair-to-emitc", RAIRToEmitCPass()),
         (
             "memref-to-emitc-funcs",
             ConvertMemRefFuncSignatures(),
@@ -264,7 +264,7 @@ def process_mlir_file(
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Convert RoCC MLIR to C code",
+        description="Convert RAIR MLIR to C code",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
@@ -281,7 +281,7 @@ Examples:
     )
 
     parser.add_argument(
-        "input", help="Input MLIR file containing rocc.batch_matmul operations"
+        "input", help="Input MLIR file containing rair.batch_matmul operations"
     )
     parser.add_argument(
         "output", nargs="?", help="Output C++ file (default: input.cpp)"

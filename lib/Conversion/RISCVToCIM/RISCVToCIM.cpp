@@ -210,11 +210,11 @@ Value buildValidMemRefFromUint32(Value bufferUint32,
 // RISCVToLLVMCall RewritePatterns: MatMulOpLoweringToCIM
 //===----------------------------------------------------------------------===//
 class MatMulOpLoweringToCIM
-    : public OpConversionPattern<rocc::MatmulOp> {
+    : public OpConversionPattern<rair::MatmulOp> {
 public:
   using OpConversionPattern::OpConversionPattern;
 
-  LogicalResult matchAndRewrite(rocc::MatmulOp op,
+  LogicalResult matchAndRewrite(rair::MatmulOp op,
                                 OpAdaptor adaptor,
                                 ConversionPatternRewriter &rewriter) const override {
     Value lhs = adaptor.getOperands()[0];
@@ -265,11 +265,11 @@ public:
 // RISCVToLLVMCall RewritePatterns: BatchMatmul(ConvDrv) operations
 //===----------------------------------------------------------------------===//
 // class BatchMatMulOpLoweringToCIM
-//     : public OpConversionPattern<rocc::BatchMatMulOp> {
+//     : public OpConversionPattern<rair::BatchMatMulOp> {
 // public:
 //   using OpConversionPattern::OpConversionPattern;
 
-//   LogicalResult matchAndRewrite(rocc::BatchMatMulOp op,
+//   LogicalResult matchAndRewrite(rair::BatchMatMulOp op,
 //                                 OpAdaptor adaptor,
 //                                 ConversionPatternRewriter &rewriter) const override {
 //     Value lhs = adaptor.getOperands()[0];
@@ -309,15 +309,15 @@ public:
 // RISCVToLLVMCall RewritePatterns: BatchMatmul(ConvDrv) operations
 //===----------------------------------------------------------------------===//
 class BatchMatMulOpLoweringToCIM
-    : public OpConversionPattern<rocc::BatchMatMulOp> {
+    : public OpConversionPattern<rair::BatchMatMulOp> {
 public:
   using OpConversionPattern::OpConversionPattern;
 
-  LogicalResult matchAndRewrite(rocc::BatchMatMulOp op,
+  LogicalResult matchAndRewrite(rair::BatchMatMulOp op,
                                 OpAdaptor adaptor,
                                 ConversionPatternRewriter &rewriter) const override {
     // 1. 提取BatchMatmul的输入操作数（lhs/rhs）和输出（out）
-    // 注：需确认rocc::BatchMatMulOp的operands顺序，通常是[lhs, rhs, out]（和Matmul一致）
+    // 注：需确认rair::BatchMatMulOp的operands顺序，通常是[lhs, rhs, out]（和Matmul一致）
     Value lhs = adaptor.getOperands()[0];
     Value rhs = adaptor.getOperands()[1];
     Value out = adaptor.getOperands().size() > 2 ? adaptor.getOperands()[2] : nullptr;
@@ -374,12 +374,12 @@ public:
 
 struct TransposeOpLoweringToCIM : public ConversionPattern {
   TransposeOpLoweringToCIM(MLIRContext *ctx)
-      : ConversionPattern(rocc::TransposeOp::getOperationName(), 1, ctx) {}
+      : ConversionPattern(rair::TransposeOp::getOperationName(), 1, ctx) {}
 
   LogicalResult matchAndRewrite(Operation *op, ArrayRef<Value> operands,
                                 ConversionPatternRewriter &rewriter) const final {
     auto loc = op->getLoc();
-    auto transposeOp = cast<rocc::TransposeOp>(op);
+    auto transposeOp = cast<rair::TransposeOp>(op);
 
     Value inputMemRef = transposeOp.getInput();   
     Value outputMemRef = transposeOp.getInit();   
@@ -456,12 +456,12 @@ public:
 
     SmallVector<Value, 4> deps;
     for (auto o : op.getOperands()) {
-      if (llvm::isa<rocc::EventType>(o.getType())) {
+      if (llvm::isa<rair::EventType>(o.getType())) {
         deps.push_back(o);
       }
     }
     if (!deps.empty()) {
-      rewriter.create<rocc::WaitAllOp>(loc, rocc::EventType::get(ctx), deps);
+      rewriter.create<rair::WaitAllOp>(loc, rair::EventType::get(ctx), deps);
     }
 
     Type i32Ty = IntegerType::get(ctx, 32);
@@ -506,15 +506,15 @@ public:
 // ToLLVMFunc RewritePatterns: TLD_DRV operations
 //===----------------------------------------------------------------------===//
 const char LoadIntrinsicName[] = "llvm.riscv.load";
-using LoadOpLowering = DrvOpLowering<rocc::LoadDrvOp, LoadIntrinsicName>;
+using LoadOpLowering = DrvOpLowering<rair::LoadDrvOp, LoadIntrinsicName>;
 
 //===----------------------------------------------------------------------===//
 // ToLLVMFunc RewritePatterns: TST_DRV operations 
 //===----------------------------------------------------------------------===//
 const char StoreIntrinsicName[] = "llvm.riscv.store"; 
-using StoreOpLowering = DrvOpLowering<rocc::StoreDrvOp, StoreIntrinsicName>;
+using StoreOpLowering = DrvOpLowering<rair::StoreDrvOp, StoreIntrinsicName>;
 
-// } // namespace rocc
+// } // namespace rair
 
 //===----------------------------------------------------------------------===//
 // ToAffine RewritePatterns: Alloc Interface
@@ -540,11 +540,11 @@ static uint64_t getTensorVolume(const Type ty) {
 //===----------------------------------------------------------------------===//
 // ToAffine RewritePatterns: LMEMAllocOpConversion
 //===----------------------------------------------------------------------===//
-class LMEMAllocOpConversion : public OpRewritePattern<rocc::AllocOp> {
+class LMEMAllocOpConversion : public OpRewritePattern<rair::AllocOp> {
 public:
-  using OpRewritePattern<rocc::AllocOp>::OpRewritePattern;
+  using OpRewritePattern<rair::AllocOp>::OpRewritePattern;
 
-  LogicalResult matchAndRewrite(rocc::AllocOp op,
+  LogicalResult matchAndRewrite(rair::AllocOp op,
                                 PatternRewriter &rewriter) const override {
 
     SmallVector<Value, 1> operands;
@@ -554,7 +554,7 @@ public:
     auto ctx = op->getContext();
 
     auto memrefTy = llvm::cast<MemRefType>(op.getType());
-    if (memrefTy.getMemorySpaceAsInt() != (int)rocc::MemorySpace::LMEM)
+    if (memrefTy.getMemorySpaceAsInt() != (int)rair::MemorySpace::LMEM)
       return failure();
 
     tys.push_back(IndexType::get(ctx));
@@ -595,11 +595,11 @@ public:
 // ToAffine RewritePatterns: DeallocOp operations
 //===----------------------------------------------------------------------===//
 class LMEMDeallocOpConversion
-    : public OpRewritePattern<rocc::DeallocOp> {
+    : public OpRewritePattern<rair::DeallocOp> {
 public:
-  using OpRewritePattern<rocc::DeallocOp>::OpRewritePattern;
+  using OpRewritePattern<rair::DeallocOp>::OpRewritePattern;
 
-  LogicalResult matchAndRewrite(rocc::DeallocOp op,
+  LogicalResult matchAndRewrite(rair::DeallocOp op,
                                 PatternRewriter &rewriter) const override {
 
     SmallVector<Value, 1> operands;
@@ -608,7 +608,7 @@ public:
     auto ctx = op->getContext();
 
     auto memrefTy = llvm::cast<MemRefType>(op.getMemref().getType());
-    if (memrefTy.getMemorySpaceAsInt() != (int)rocc::MemorySpace::LMEM)
+    if (memrefTy.getMemorySpaceAsInt() != (int)rair::MemorySpace::LMEM)
       return failure();
 
     tys.push_back(MemRefType::get(
@@ -644,11 +644,11 @@ public:
 // ToLLVMFunc RewritePatterns: WaitAll operations
 //===----------------------------------------------------------------------===//
 
-class WaitAllOpLowering : public OpConversionPattern<rocc::WaitAllOp> {
+class WaitAllOpLowering : public OpConversionPattern<rair::WaitAllOp> {
 public:
-  using OpConversionPattern<rocc::WaitAllOp>::OpConversionPattern;
+  using OpConversionPattern<rair::WaitAllOp>::OpConversionPattern;
 
-  LogicalResult matchAndRewrite(rocc::WaitAllOp op, OpAdaptor adaptor,
+  LogicalResult matchAndRewrite(rair::WaitAllOp op, OpAdaptor adaptor,
                                 ConversionPatternRewriter &rewriter) const override {
     SmallVector<Value, 8> operands{adaptor.getOperands()};
     auto module = op->getParentOfType<ModuleOp>();
@@ -685,11 +685,11 @@ public:
 // ToLLVMFunc RewritePatterns: PoolingNCHWMaxOp operations
 //===----------------------------------------------------------------------===//
 class PoolingNCHWMaxOpLoweringToCIM
-    : public OpConversionPattern<rocc::PoolingNchwMaxOp> {
+    : public OpConversionPattern<rair::PoolingNchwMaxOp> {
 public:
   using OpConversionPattern::OpConversionPattern;
 
-  LogicalResult matchAndRewrite(rocc::PoolingNchwMaxOp op,
+  LogicalResult matchAndRewrite(rair::PoolingNchwMaxOp op,
                                 OpAdaptor adaptor,
                                 ConversionPatternRewriter &rewriter) const override {
     Value input = adaptor.getOperands()[0];
@@ -760,17 +760,17 @@ public:
 //===----------------------------------------------------------------------===//
 
 namespace {
-class ROCCToCIMLoweringPass
-    : public mlir::PassWrapper<ROCCToCIMLoweringPass,
+class RAIRToCIMLoweringPass
+    : public mlir::PassWrapper<RAIRToCIMLoweringPass,
                                mlir::OperationPass<mlir::ModuleOp>> {
 public:
   StringRef getArgument() const final { 
-    return "convert-rocc-to-cim"; 
+    return "convert-rair-to-cim"; 
   }
   StringRef getDescription() const final {
-    return "Lower ROCC dialect operations to sCIM dialect";
+    return "Lower RAIR dialect operations to sCIM dialect";
   }
-  MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(ROCCToCIMLoweringPass)
+  MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(RAIRToCIMLoweringPass)
   void getDependentDialects(mlir::DialectRegistry &registry) const override {
     registry.insert<cim::CIMDialect, mlir::LLVM::LLVMDialect, 
                     mlir::scf::SCFDialect, mlir::cf::ControlFlowDialect,
@@ -782,7 +782,7 @@ public:
 };
 } // namespace
 
-void ROCCToCIMLoweringPass::runOnOperation() {
+void RAIRToCIMLoweringPass::runOnOperation() {
   mlir::LLVMConversionTarget target(getContext());
 
   // target.addLegalDialect<cim::CIMDialect>();
@@ -793,7 +793,7 @@ void ROCCToCIMLoweringPass::runOnOperation() {
                          mlir::async::AsyncDialect>();
 
   target.addIllegalOp<linalg::MatmulOp>();
-  target.addIllegalDialect<rocc::ROCCDialect, cim::CIMDialect>();
+  target.addIllegalDialect<rair::RAIRDialect, cim::CIMDialect>();
 
   target.addDynamicallyLegalDialect<mlir::linalg::LinalgDialect>(
     [](Operation *op) {
@@ -816,7 +816,7 @@ void ROCCToCIMLoweringPass::runOnOperation() {
 }
 
 namespace cim {  
-  std::unique_ptr<mlir::Pass> createROCCLowerToCIMPass() {
-    return std::make_unique<ROCCToCIMLoweringPass>(); 
+  std::unique_ptr<mlir::Pass> createRAIRLowerToCIMPass() {
+    return std::make_unique<RAIRToCIMLoweringPass>(); 
   }
 }

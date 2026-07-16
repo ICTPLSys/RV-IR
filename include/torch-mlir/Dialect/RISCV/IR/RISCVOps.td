@@ -18,14 +18,14 @@ include "RISCVDialect.td"
 //===----------------------------------------------------------------------===//
 // ConstantOp
 //===----------------------------------------------------------------------===//
-def ConstantOp : ROCC_Op<"constant", [Pure]> {
+def ConstantOp : RAIR_Op<"constant", [Pure]> {
   let summary = "constant";
   let description = [{
     Constant operation turns a literal into an SSA value. The data is attached
     to the operation as an attribute. For example:
     Example:
     ```mlir
-      %0 = "rocc.constant"()
+      %0 = "rair.constant"()
       { value = dense<[[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]> : tensor<2x3xf64> }
       : () -> tensor<2x3xf64>
     ```
@@ -39,9 +39,9 @@ def ConstantOp : ROCC_Op<"constant", [Pure]> {
     OpBuilder<(ins "int64_t":$value)>
     // OpBuilder<(ins "int":$value)>
   ];
-  // let results = (outs ROCCTensor);
+  // let results = (outs RAIRTensor);
   // let arguments = (ins ElementsAttr:$value);
-  // let results = (outs ROCCTensor);
+  // let results = (outs RAIRTensor);
   let arguments = (ins TypedAttrInterface:$value);
   let results = (outs AnyType:$result);
 
@@ -49,7 +49,7 @@ def ConstantOp : ROCC_Op<"constant", [Pure]> {
 //===----------------------------------------------------------------------===//
 // PrintOp
 //===----------------------------------------------------------------------===//
-def PrintOp : ROCC_Op<"print", [Pure]> {
+def PrintOp : RAIR_Op<"print", [Pure]> {
     let summary = "print operation";
     let description = [{
       The "print" builtin operation prints a given input tensor, and produces
@@ -57,12 +57,12 @@ def PrintOp : ROCC_Op<"print", [Pure]> {
       
       Example:
       ```mlir
-        "rocc.print"(%0) : (tensor<2x3xf64>) -> ()
+        "rair.print"(%0) : (tensor<2x3xf64>) -> ()
        ```
     }];
 
     // The print operation takes an input tensor to print.
-    let arguments = (ins AnyTypeOf<[ROCCTensor, AnyMemRef]>:$input);
+    let arguments = (ins AnyTypeOf<[RAIRTensor, AnyMemRef]>:$input);
 
     let assemblyFormat = "$input attr-dict `:` type($input)";
 }
@@ -71,7 +71,7 @@ def PrintOp : ROCC_Op<"print", [Pure]> {
 //===----------------------------------------------------------------------===//
 // MatMulOp
 //===----------------------------------------------------------------------===//
-def MatmulOp : ROCC_Op<"matmul", [Pure]> {
+def MatmulOp : RAIR_Op<"matmul", [Pure]> {
     let summary = [{
       Performs a matrix multiplication of two 2D inputs without broadcast or transpose.
     }];
@@ -79,15 +79,19 @@ def MatmulOp : ROCC_Op<"matmul", [Pure]> {
       The "matmul" operation performs matrix multiplication between two
       tensors. The shapes of the tensor operands are expected to be compatible
       for matrix multiplication.
-      
+
       Example MatMul:
       ```mlir
-      rocc.matmul ins(%lhs, %rhs : memref<2x3xf64>, memref<3x4xf64s>)
+      rair.matmul ins(%lhs, %rhs : memref<2x3xf64>, memref<3x4xf64s>)
                    outs(%out : memref<2x4xf64>)
+                   {accelerator = "gemmini", tile_size = array<i64: 16, 16, 16>}
       ```
     }];
 
-    let arguments = (ins AnyMemRef:$lhs, AnyMemRef:$rhs, AnyMemRef:$output);
+    let arguments = (ins AnyMemRef:$lhs, AnyMemRef:$rhs, AnyMemRef:$output,
+                         OptionalAttr<StrAttr>:$accelerator,
+                         OptionalAttr<DenseI64ArrayAttr>:$tile_size,
+                         OptionalAttr<StrAttr>:$dataflow);
     let results = (outs);
 
     // Allow building a MatMulOp with from the two input operands.
@@ -105,7 +109,7 @@ def MatmulOp : ROCC_Op<"matmul", [Pure]> {
 //===----------------------------------------------------------------------===//
 // BatchMatMulOp
 //===----------------------------------------------------------------------===//
-def BatchMatMulOp : ROCC_Op<"batch_matmul", [Pure]> {
+def BatchMatMulOp : RAIR_Op<"batch_matmul", [Pure]> {
   let summary = [{
     Performs an in-place batch matrix multiplication.
   }];
@@ -119,13 +123,17 @@ def BatchMatMulOp : ROCC_Op<"batch_matmul", [Pure]> {
 
     Example:
     ```mlir
-    rocc.batch_matmul ins(%lhs, %rhs : memref<1x128x2048xf32>, memref<1x2048x8192xf32>)
+    rair.batch_matmul ins(%lhs, %rhs : memref<1x128x2048xf32>, memref<1x2048x8192xf32>)
                       outs(%out : memref<1x128x8192xf32>)
+                      {accelerator = "gemmini"}
     ```
   }];
 
   // In-place semantics: no results
-  let arguments = (ins AnyMemRef:$lhs, AnyMemRef:$rhs, AnyMemRef:$output);
+  let arguments = (ins AnyMemRef:$lhs, AnyMemRef:$rhs, AnyMemRef:$output,
+                       OptionalAttr<StrAttr>:$accelerator,
+                       OptionalAttr<DenseI64ArrayAttr>:$tile_size,
+                       OptionalAttr<StrAttr>:$dataflow);
   let results = (outs);
 
   let assemblyFormat = [{
@@ -138,7 +146,7 @@ def BatchMatMulOp : ROCC_Op<"batch_matmul", [Pure]> {
 //===----------------------------------------------------------------------===//
 // MatvecOp
 //===----------------------------------------------------------------------===//
-def MatvecOp : ROCC_Op<"matvec", [Pure]> {
+def MatvecOp : RAIR_Op<"matvec", [Pure]> {
     let summary = [{
       Performs general matrix-vector multiplication (GEMV), computing the product 
       of a matrix and a vector with optional bias addition.
@@ -153,12 +161,14 @@ def MatvecOp : ROCC_Op<"matvec", [Pure]> {
       
       Example Gemv:
       ```mlir
-        %2 = "rocc.matvec"(%0, %1) : (tensor<4x5xf32>, tensor<5xf32>) -> tensor<4xf32>
+        %2 = "rair.matvec"(%0, %1) : (tensor<4x5xf32>, tensor<5xf32>) -> tensor<4xf32>
       ```
     }];
 
-    let arguments = (ins ROCCTensor:$lhs, ROCCTensor:$rhs);
-    let results = (outs ROCCTensor);
+    let arguments = (ins RAIRTensor:$lhs, RAIRTensor:$rhs,
+                         OptionalAttr<StrAttr>:$accelerator,
+                         OptionalAttr<DenseI64ArrayAttr>:$tile_size);
+    let results = (outs RAIRTensor);
 
     let builders = [
       OpBuilder<(ins "mlir::Value":$lhs, "mlir::Value":$rhs)>
@@ -167,7 +177,7 @@ def MatvecOp : ROCC_Op<"matvec", [Pure]> {
 //===----------------------------------------------------------------------===//
 // ReduceOp
 //===----------------------------------------------------------------------===//
-def ReduceOp : ROCC_Op<"reduce", [Pure]> {
+def ReduceOp : RAIR_Op<"reduce", [Pure]> {
 
   let summary = "tensor reduction operation";
   let description = [{
@@ -176,28 +186,28 @@ def ReduceOp : ROCC_Op<"reduce", [Pure]> {
     Example:
     ```mlir
       // Reduce add over dimension 0
-        %res1 = "rocc.reduce"(%0) {kind = "sum",dim=[0]} : 
+        %res1 = "rair.reduce"(%0) {kind = "sum",dim=[0]} : 
         (tensor<3x2x4xf64>) -> tensor<1x2x4xf64>
       // Reduce add over dimension 1
-        %res2 = "rocc.reduce"(%0) {kind = "sum",dim=[1]} : 
+        %res2 = "rair.reduce"(%0) {kind = "sum",dim=[1]} : 
         (tensor<3x2x4xf64>) -> tensor<3x1x4xf64>
       // Reduce add over dimension 2
-        %res3 = "rocc.reduce"(%0) {kind = "sum",dim=[2]} : 
+        %res3 = "rair.reduce"(%0) {kind = "sum",dim=[2]} : 
         (tensor<3x2x4xf64>) -> tensor<3x2x1xf64>
       // Reduce add over dimension 0 and dimension 1
-        %res4 = "rocc.reduce"(%0) {kind = "sum",dim=[0,1]} :
+        %res4 = "rair.reduce"(%0) {kind = "sum",dim=[0,1]} :
         (tensor<3x2x4xf64>) -> tensor<1x1x4xf64>
 
       // Reduce max over dimension 0 
-        %res_max = "rocc.reduce"(%0) {kind = "max", dim=[0]} : (tensor<3x2x4xf64>) -> tensor<1x2x4xf64>
+        %res_max = "rair.reduce"(%0) {kind = "max", dim=[0]} : (tensor<3x2x4xf64>) -> tensor<1x2x4xf64>
 
       // Reduce min over dimension 0 
-        %res_min = "rocc.reduce"(%0) {kind = "min", dim=[1]} : (tensor<3x2x4xf64>) -> tensor<3x1x4xf64>
+        %res_min = "rair.reduce"(%0) {kind = "min", dim=[1]} : (tensor<3x2x4xf64>) -> tensor<3x1x4xf64>
     ```
   }];
-  // let arguments = (ins ROCCTensor:$input, I64ArrayAttr:$axes, StrAttr:$kind);
-  let arguments = (ins ROCCTensor:$input, I64ArrayAttr:$dim,StrAttr:$kind);
-  let results = (outs ROCCTensor:$result);
+  let arguments = (ins RAIRTensor:$input, I64ArrayAttr:$dim, StrAttr:$kind,
+                       OptionalAttr<StrAttr>:$accelerator);
+  let results = (outs RAIRTensor:$result);
 
     let assemblyFormat = [{
     $input attr-dict `:` type($input) `->` type($result)
@@ -216,20 +226,21 @@ def ReduceOp : ROCC_Op<"reduce", [Pure]> {
 // TransposeOp
 //===----------------------------------------------------------------------===//
 
-def TransposeOp : ROCC_Op<"transpose", [Pure]> {
+def TransposeOp : RAIR_Op<"transpose", [Pure]> {
     // [Pure, DeclareOpInterfaceMethods<ShapeInferenceOpInterface>]> {
 
   let summary = "transpose operation";
   let description = [{
     Example:
     ```mlir
-      rocc.transpose ins(%0 : memref<64x32xf32>) outs(%alloc : memref<32x64xf32>) {permutation = array<i64: 1, 0>}
+      rair.transpose ins(%0 : memref<64x32xf32>) outs(%alloc : memref<32x64xf32>) {permutation = array<i64: 1, 0>}
       ```
   }];
   let arguments = (ins
-    AnyMemRef :$input,       
-    AnyMemRef :$init,         
-    DenseI64ArrayAttr:$permutation  // 转置维度
+    AnyMemRef :$input,
+    AnyMemRef :$init,
+    DenseI64ArrayAttr:$permutation,  // 转置维度
+    OptionalAttr<StrAttr>:$accelerator
   );
 
   let assemblyFormat = [{
@@ -242,7 +253,7 @@ def TransposeOp : ROCC_Op<"transpose", [Pure]> {
 // ReshapeOp
 //===----------------------------------------------------------------------===//
 
-def ReshapeOp : ROCC_Op<"reshape", [
+def ReshapeOp : RAIR_Op<"reshape", [
     // DeclareOpInterfaceMethods<OpAsmOpInterface, ["getAsmResultNames"]>,
     Pure]> {
   let summary = "tensor reshape operation";
@@ -251,7 +262,7 @@ def ReshapeOp : ROCC_Op<"reshape", [
     the same number of elements but different shapes. For example:
 
     ```mlir
-    %dest = "rocc.reshape"(%src, %shape) : (tensor<2x3xf32>, tensor<2xi32>) -> tensor<3x2xf32>
+    %dest = "rair.reshape"(%src, %shape) : (tensor<2x3xf32>, tensor<2xi32>) -> tensor<3x2xf32>
     ```
   }];
 
@@ -270,35 +281,34 @@ def ReshapeOp : ROCC_Op<"reshape", [
 // AddOp
 //===----------------------------------------------------------------------===//
 
-def AddOp : ROCC_Op<"add", [Pure,Commutative]> {
+def AddOp : RAIR_Op<"add", [Pure,Commutative]> {
   let summary = "General addition operation (supports integer/float)";
   let description = [{
     The `add` operation takes two operands and returns one result, with all types consistent.
     Supported types:
     - Integer: Signless integer scalar/Tensor (e.g., i32, tensor<4xi64>)
     - Float: Floating-point scalar/Tensor (e.g., f16, tensor<f64>)
-    
+
     Examples:
     // Integer addition (scalar/Tensor)
-    %int_scalar = "rocc.add"(%a, %b) : (i32, i32) -> i32
-    %int_tensor = "rocc.add"(%t_a, %t_b) : (tensor<2x3xi32>, tensor<2x3xi32>) -> tensor<2x3xi32>
+    %int_scalar = "rair.add"(%a, %b) : (i32, i32) -> i32
+    %int_tensor = "rair.add"(%t_a, %t_b) : (tensor<2x3xi32>, tensor<2x3xi32>) -> tensor<2x3xi32>
 
   }];
 
-    let arguments = (ins ROCCTensor:$lhs, ROCCTensor:$rhs);
-    let results = (outs ROCCTensor);
+    let arguments = (ins RAIRTensor:$lhs, RAIRTensor:$rhs,
+                         OptionalAttr<StrAttr>:$accelerator);
+    let results = (outs RAIRTensor);
     let builders = [
     OpBuilder<(ins "mlir::Value":$lhs, "mlir::Value":$rhs)>
   ];
-  // let hasFolder = 1;
-  // let hasCanonicalizer = 1;
 }
 
 //===----------------------------------------------------------------------===//
 // SubOp
 //===----------------------------------------------------------------------===//
 
-def SubOp : ROCC_Op<"sub", [Pure]> {
+def SubOp : RAIR_Op<"sub", [Pure]> {
   let summary = "General subtraction operation (supports integer/float)";
   let description = [{
     The `sub` operation takes two operands and returns one result, with all types consistent.
@@ -308,17 +318,18 @@ def SubOp : ROCC_Op<"sub", [Pure]> {
     
     Examples:
     // Integer subtraction (scalar/Tensor)
-    %int_scalar = "rocc.sub"(%a, %b) : (i32, i32) -> i32
-    %int_tensor = "rocc.sub"(%t_a, %t_b) : (tensor<2x3xi32>, tensor<2x3xi32>) -> tensor<2x3xi32>
+    %int_scalar = "rair.sub"(%a, %b) : (i32, i32) -> i32
+    %int_tensor = "rair.sub"(%t_a, %t_b) : (tensor<2x3xi32>, tensor<2x3xi32>) -> tensor<2x3xi32>
 
     // Float subtraction (scalar/Tensor)
-    %float_scalar = "rocc.sub"(%c, %d) : (f32, f32) -> f32
-    %float_tensor = "rocc.sub"(%vec_c, %vec_d) : (tensor<2x3xf16>, tensor<2x3xf16>) -> tensor<2x3xf16>
+    %float_scalar = "rair.sub"(%c, %d) : (f32, f32) -> f32
+    %float_tensor = "rair.sub"(%vec_c, %vec_d) : (tensor<2x3xf16>, tensor<2x3xf16>) -> tensor<2x3xf16>
 
   }];
 
-    let arguments = (ins ROCCTensor:$lhs, ROCCTensor:$rhs);
-    let results = (outs ROCCTensor);
+    let arguments = (ins RAIRTensor:$lhs, RAIRTensor:$rhs,
+                         OptionalAttr<StrAttr>:$accelerator);
+    let results = (outs RAIRTensor);
 
 }
 
@@ -326,7 +337,7 @@ def SubOp : ROCC_Op<"sub", [Pure]> {
 // MulOp
 //===----------------------------------------------------------------------===//
 
-def MulOp : ROCC_Op<"mul", [Pure]> {
+def MulOp : RAIR_Op<"mul", [Pure]> {
   let summary = "General multiplication operation (supports integer/float)";
   let description = [{
     The `mul` operation takes two operands and returns one result, with all types consistent.
@@ -336,23 +347,24 @@ def MulOp : ROCC_Op<"mul", [Pure]> {
     
     Examples:
     // Integer multiplication (scalar/Tensor)
-    %int_scalar = "rocc.mul"(%a, %b) : (i32, i32) -> i32
-    %int_tensor = "rocc.mul"(%t_a, %t_b) : (tensor<2x3xi32>, tensor<2x3xi32>) -> tensor<2x3xi32>
+    %int_scalar = "rair.mul"(%a, %b) : (i32, i32) -> i32
+    %int_tensor = "rair.mul"(%t_a, %t_b) : (tensor<2x3xi32>, tensor<2x3xi32>) -> tensor<2x3xi32>
 
     // Float multiplication (scalar/Tensor)
-    %float_scalar = "rocc.mul"(%c, %d) : (f32, f32) -> f32
-    %float_tensor = "rocc.mul"(%vec_c, %vec_d) : (tensor<2x3xf16>, tensor<2x3xf16>) -> tensor<2x3xf16>
+    %float_scalar = "rair.mul"(%c, %d) : (f32, f32) -> f32
+    %float_tensor = "rair.mul"(%vec_c, %vec_d) : (tensor<2x3xf16>, tensor<2x3xf16>) -> tensor<2x3xf16>
   }];
 
-    let arguments = (ins ROCCTensor:$lhs, ROCCTensor:$rhs);
-    let results = (outs ROCCTensor);
+    let arguments = (ins RAIRTensor:$lhs, RAIRTensor:$rhs,
+                         OptionalAttr<StrAttr>:$accelerator);
+    let results = (outs RAIRTensor);
 }
 
 //===----------------------------------------------------------------------===//
 // DivOp
 //===----------------------------------------------------------------------===//
 
-def DivOp : ROCC_Op<"div", [Pure]> {
+def DivOp : RAIR_Op<"div", [Pure]> {
   let summary = "General division operation (supports signed/unsigned integer and float)";
   let description = [{
     The `div` operation takes two operands and returns one result, with all types consistent.
@@ -362,23 +374,24 @@ def DivOp : ROCC_Op<"div", [Pure]> {
     
     Examples:
     // Integer multiplication (scalar/Tensor)
-    %int_scalar = "rocc.div"(%a, %b) : (i32, i32) -> i32
-    %int_tensor = "rocc.div"(%t_a, %t_b) : (tensor<2x3xi32>, tensor<2x3xi32>) -> tensor<2x3xi32>
+    %int_scalar = "rair.div"(%a, %b) : (i32, i32) -> i32
+    %int_tensor = "rair.div"(%t_a, %t_b) : (tensor<2x3xi32>, tensor<2x3xi32>) -> tensor<2x3xi32>
 
     // Float multiplication (scalar/Tensor)
-    %float_scalar = "rocc.div"(%c, %d) : (f32, f32) -> f32
-    %float_tensor = "rocc.div"(%vec_c, %vec_d) : (tensor<2x3xf16>, tensor<2x3xf16>) -> tensor<2x3xf16>
+    %float_scalar = "rair.div"(%c, %d) : (f32, f32) -> f32
+    %float_tensor = "rair.div"(%vec_c, %vec_d) : (tensor<2x3xf16>, tensor<2x3xf16>) -> tensor<2x3xf16>
   }];
 
-    let arguments = (ins ROCCTensor:$lhs, ROCCTensor:$rhs);
-    let results = (outs ROCCTensor);
+    let arguments = (ins RAIRTensor:$lhs, RAIRTensor:$rhs,
+                         OptionalAttr<StrAttr>:$accelerator);
+    let results = (outs RAIRTensor);
 }
 
 //===----------------------------------------------------------------------===//
 // MaxOp
 //===----------------------------------------------------------------------===//
 
-def MaxOp : ROCC_Op<"max", [Pure]> {
+def MaxOp : RAIR_Op<"max", [Pure]> {
   let summary = "General maximum operation (supports signed/unsigned integer and float)";
   let description = [{
     The `max` operation takes two operands and returns their maximum value, with all types consistent.
@@ -388,23 +401,24 @@ def MaxOp : ROCC_Op<"max", [Pure]> {
     
     Examples:
     // Integer multiplication (scalar/Tensor)
-    %int_scalar = "rocc.max"(%a, %b) : (i32, i32) -> i32
-    %int_tensor = "rocc.max"(%t_a, %t_b) : (tensor<2x3xi32>, tensor<2x3xi32>) -> tensor<2x3xi32>
+    %int_scalar = "rair.max"(%a, %b) : (i32, i32) -> i32
+    %int_tensor = "rair.max"(%t_a, %t_b) : (tensor<2x3xi32>, tensor<2x3xi32>) -> tensor<2x3xi32>
 
     // Float multiplication (scalar/Tensor)
-    %float_scalar = "rocc.max"(%c, %d) : (f32, f32) -> f32
-    %float_tensor = "rocc.max"(%vec_c, %vec_d) : (tensor<2x3xf16>, tensor<2x3xf16>) -> tensor<2x3xf16>
+    %float_scalar = "rair.max"(%c, %d) : (f32, f32) -> f32
+    %float_tensor = "rair.max"(%vec_c, %vec_d) : (tensor<2x3xf16>, tensor<2x3xf16>) -> tensor<2x3xf16>
   }];
 
-    let arguments = (ins ROCCTensor:$lhs, ROCCTensor:$rhs);
-    let results = (outs ROCCTensor);
+    let arguments = (ins RAIRTensor:$lhs, RAIRTensor:$rhs,
+                         OptionalAttr<StrAttr>:$accelerator);
+    let results = (outs RAIRTensor);
 
 }
 //===----------------------------------------------------------------------===//
 // MinOp
 //===----------------------------------------------------------------------===//
 
-def MinOp : ROCC_Op<"min", [Pure]> {
+def MinOp : RAIR_Op<"min", [Pure]> {
   let summary = "General minimum operation (supports signed/unsigned integer and float)";
   let description = [{
     The `min` operation takes two operands and returns their minimum value, with all types consistent.
@@ -414,22 +428,23 @@ def MinOp : ROCC_Op<"min", [Pure]> {
     
     Examples:
     // Integer multiplication (scalar/Tensor)
-    %int_scalar = "rocc.min"(%a, %b) : (i32, i32) -> i32
-    %int_tensor = "rocc.min"(%t_a, %t_b) : (tensor<2x3xi32>, tensor<2x3xi32>) -> tensor<2x3xi32>
+    %int_scalar = "rair.min"(%a, %b) : (i32, i32) -> i32
+    %int_tensor = "rair.min"(%t_a, %t_b) : (tensor<2x3xi32>, tensor<2x3xi32>) -> tensor<2x3xi32>
 
     // Float multiplication (scalar/Tensor)
-    %float_scalar = "rocc.min"(%c, %d) : (f32, f32) -> f32
-    %float_tensor = "rocc.min"(%vec_c, %vec_d) : (tensor<2x3xf16>, tensor<2x3xf16>) -> tensor<2x3xf16>
+    %float_scalar = "rair.min"(%c, %d) : (f32, f32) -> f32
+    %float_tensor = "rair.min"(%vec_c, %vec_d) : (tensor<2x3xf16>, tensor<2x3xf16>) -> tensor<2x3xf16>
   }];
 
-    let arguments = (ins ROCCTensor:$lhs, ROCCTensor:$rhs);
-    let results = (outs ROCCTensor);
+    let arguments = (ins RAIRTensor:$lhs, RAIRTensor:$rhs,
+                         OptionalAttr<StrAttr>:$accelerator);
+    let results = (outs RAIRTensor);
 }
 //===----------------------------------------------------------------------===//
 // AndIOp
 //===----------------------------------------------------------------------===//
 
-def AndIOp : ROCC_Op<"andi",
+def AndIOp : RAIR_Op<"andi",
     [Pure]> {
   let summary = "integer binary and";
   let description = [{
@@ -442,10 +457,10 @@ def AndIOp : ROCC_Op<"andi",
 
     ```mlir
     // Scalar integer bitwise and.
-    %a = rocc.andi %b, %c : i64
+    %a = rair.andi %b, %c : i64
 
     // Tensor element-wise bitwise integer and.
-    %x = rocc.andi %y, %z : tensor<4x?xi8>
+    %x = rair.andi %y, %z : tensor<4x?xi8>
     ```
   }];
 
@@ -456,7 +471,7 @@ def AndIOp : ROCC_Op<"andi",
 // XOrIOp
 //===----------------------------------------------------------------------===//
 
-def XOrIOp : ROCC_Op<"xori",
+def XOrIOp : RAIR_Op<"xori",
     [Pure]> {
   let summary = "integer binary xor";
   let description = [{
@@ -469,10 +484,10 @@ def XOrIOp : ROCC_Op<"xori",
 
     ```mlir
     // Scalar integer bitwise xor.
-    %a = rocc.xori %b, %c : i64
+    %a = rair.xori %b, %c : i64
 
     // SIMD tensor element-wise bitwise integer xor.
-    %f = rocc.xori %g, %h : tensor<4xi32>
+    %f = rair.xori %g, %h : tensor<4xi32>
     ```
   }];
 
@@ -483,7 +498,7 @@ def XOrIOp : ROCC_Op<"xori",
 // OrIOp   
 //===----------------------------------------------------------------------===//
 
-def OrIOp : ROCC_Op<"ori",
+def OrIOp : RAIR_Op<"ori",
     [Pure]> {
   let summary = "integer binary xor";
   let description = [{
@@ -496,10 +511,10 @@ def OrIOp : ROCC_Op<"ori",
 
     ```mlir
     // Scalar integer bitwise xor.
-    %a = rocc.ori %b, %c : i64
+    %a = rair.ori %b, %c : i64
 
     // SIMD tensor element-wise bitwise integer xor.
-    %f = rocc.ori %g, %h : tensor<4xi32>
+    %f = rair.ori %g, %h : tensor<4xi32>
     ```
   }];
 
@@ -510,7 +525,7 @@ def OrIOp : ROCC_Op<"ori",
 // NegFOp
 //===----------------------------------------------------------------------===//
 
-def NegFOp : ROCC_Op<"negf",
+def NegFOp : RAIR_Op<"negf",
     [Pure]> {
   let summary = "floating point negation";
   let description = [{
@@ -523,20 +538,21 @@ def NegFOp : ROCC_Op<"negf",
 
     ```mlir
     // Scalar negation value.
-    %a = rocc.negf %b : f64
+    %a = rair.negf %b : f64
 
     // Tensor element-wise negation value.
-    %x = rocc.negf %y : tensor<4x2xf8>
+    %x = rair.negf %y : tensor<4x2xf8>
     ```
   }];
 
-  let arguments = (ins FloatLike:$operand);
+  let arguments = (ins FloatLike:$operand,
+                       OptionalAttr<StrAttr>:$accelerator);
   let results = (outs FloatLike:$result);
 }
 //===----------------------------------------------------------------------===//
 // CmpIOp
 //===----------------------------------------------------------------------===//
-def CmpIOp : ROCC_Op<"cmpi", [Pure]> {
+def CmpIOp : RAIR_Op<"cmpi", [Pure]> {
   let summary = "integer comparison operation";
   let description = [{
     The `cmpi` operation is a generic comparison for integer-like types.  
@@ -559,16 +575,16 @@ def CmpIOp : ROCC_Op<"cmpi", [Pure]> {
 
     ```mlir
     // Scalar comparison.
-    %0 = "rocc.cmpi"(%lhs, %rhs) {predicate = "slt"} 
+    %0 = "rair.cmpi"(%lhs, %rhs) {predicate = "slt"} 
         : (i32, i32) -> i1
 
     // Tensor elementwise comparison.
-    %1 = "rocc.cmpi"(%a, %b) {predicate = "eq"} 
+    %1 = "rair.cmpi"(%a, %b) {predicate = "eq"} 
         : (tensor<4xi64>, tensor<4xi64>) -> tensor<4xi1>
     ```
   }];
 
-  // let arguments = (ins ROCCTensor:$lhs, ROCCTensor:$rhs, StrAttr:$predicate);
+  // let arguments = (ins RAIRTensor:$lhs, RAIRTensor:$rhs, StrAttr:$predicate);
   // let arguments = (ins SignlessIntegerOrIndexLikeOfAnyRank:$lhs, SignlessIntegerOrIndexLikeOfAnyRank:$rhs, StrAttr:$predicate);
   let arguments = (ins SignlessIntegerOrIndexLike:$lhs, SignlessIntegerOrIndexLike:$rhs, StrAttr:$predicate);
   
@@ -580,7 +596,7 @@ def CmpIOp : ROCC_Op<"cmpi", [Pure]> {
 //===----------------------------------------------------------------------===//
 // CmpFOp
 //===----------------------------------------------------------------------===//
-def CmpFOp : ROCC_Op<"cmpf", [Pure]> {
+def CmpFOp : RAIR_Op<"cmpf", [Pure]> {
   let summary = "floating-point comparison operation";
   let description = [{
     The `cmpf` operation compares its two operands according to the float
@@ -595,10 +611,10 @@ def CmpFOp : ROCC_Op<"cmpf", [Pure]> {
 
     ```mlir
     // Scalar comparison.
-    %0 = "rocc.cmpf"(%lhs, %rhs) {predicate = "slt"} 
+    %0 = "rair.cmpf"(%lhs, %rhs) {predicate = "slt"} 
         : (f32, f32) -> i1
     //Tensor elementwise comparison.
-    %1 = "rocc.cmpf"(%a, %b) {predicate = "eq"} 
+    %1 = "rair.cmpf"(%a, %b) {predicate = "eq"} 
         : (tensor<4xf32>, tensor<4xf32>) -> tensor<4xi1>
     ```
   }];
@@ -614,12 +630,12 @@ def CmpFOp : ROCC_Op<"cmpf", [Pure]> {
 //===----------------------------------------------------------------------===//
 // BarrierOp
 //===----------------------------------------------------------------------==
-def BarrierOp : ROCC_Op<"barrier", []> {
+def BarrierOp : RAIR_Op<"barrier", []> {
     let summary = "Wait for dependent computations to finish.";
     let description = [{Blocks until the value of the associated future is present.
                        This operation can also be used to enforce a particular scheduling on the execution graph.}];
 
-    let arguments = (ins ROCCTensor:$value);
+    let arguments = (ins RAIRTensor:$value);
     let results = (outs AnyRankedTensor:$result);
 
     let assemblyFormat = "$value attr-dict `:` qualified(type($value)) `->` type($result)";
@@ -627,11 +643,11 @@ def BarrierOp : ROCC_Op<"barrier", []> {
 //===----------------------------------------------------------------------===//
 // NocOp
 //===----------------------------------------------------------------------==
-def NocOp : ROCC_Op<"noc", []> {
+def NocOp : RAIR_Op<"noc", []> {
     let summary = "On-Chip Network Communication.";
     let description = [{TODO.}];
 
-    let arguments = (ins ROCCTensor:$value);
+    let arguments = (ins RAIRTensor:$value);
     let results = (outs AnyRankedTensor:$result);
 
     let assemblyFormat = "$value attr-dict `:` qualified(type($value)) `->` type($result)";
@@ -641,19 +657,23 @@ def NocOp : ROCC_Op<"noc", []> {
 // Conv2DOp
 //===----------------------------------------------------------------------===//
 
-def Conv2DOp : ROCC_Op<"conv2d", 
+def Conv2DOp : RAIR_Op<"conv2d",
     [Pure]> {
-    let summary = "ROCC dialect convolution 2d operation";
+    let summary = "RAIR dialect convolution 2d operation";
     let description = [{
         Performs a 2D convolution on the input tensor using specified kernel.
         Example:
-        %output = "rocc.conv2d"(%input, %kernel) : (tensor<4x4xf32>, tensor<2x2xf32>) -> tensor<3x3xf32>
+        %output = "rair.conv2d"(%input, %kernel) {accelerator = "gemmini"}
+          : (tensor<4x4xf32>, tensor<2x2xf32>) -> tensor<3x3xf32>
     }];
 
-    let arguments = (ins ROCCTensor:$input, ROCCTensor:$kernel);
-    // let arguments = (ins ROCCTensor:$input, ROCCTensor:$kernel, ROCCTensor:$bias);
+    let arguments = (ins RAIRTensor:$input, RAIRTensor:$kernel,
+                         OptionalAttr<StrAttr>:$accelerator,
+                         OptionalAttr<DenseI64ArrayAttr>:$tile_size,
+                         OptionalAttr<StrAttr>:$dataflow);
+    // let arguments = (ins RAIRTensor:$input, RAIRTensor:$kernel, RAIRTensor:$bias);
 
-    let results = (outs ROCCTensor:$output);
+    let results = (outs RAIRTensor:$output);
 
     // let builders = [
     //     OpBuilder<(ins "mlir::Value":$input, "mlir::Value":$kernel, "mlir::Value":$bias)>
@@ -671,17 +691,19 @@ def Conv2DOp : ROCC_Op<"conv2d",
 //===----------------------------------------------------------------------===//
 // LaunchOp
 //===----------------------------------------------------------------------===//
-def LaunchOp : ROCC_Op<"launch", [  ROCC_AsyncOpInterface, 
-                                     ROCC_HierarchyInterface, 
+def LaunchOp : RAIR_Op<"launch", [  RAIR_AsyncOpInterface, 
+                                     RAIR_HierarchyInterface, 
                                      AttrSizedOperandSegments,  //MLIR变长操作数的分段管理                                  
                                      IsolatedFromAbove,//MLIR特性，标记操作的region是上层隔离的
                                      AffineScope,  //MLIR特性，为操作创建一个仿射作用域
                                      SingleBlockImplicitTerminator<"LaunchTerminatorOp">]>,
                           Arguments<(ins OptionalAttr<SymbolNameAttr>:$sym_name,
-                                         Variadic<ROCC_AsyncToken>:$async_dependencies,
+                                         Variadic<RAIR_AsyncToken>:$async_dependencies,
                                          Variadic<Index>:$sizes,
-                                         Variadic<AnyType>:$launch_operands)>,                                        
-                          Results<(outs Optional<ROCC_AsyncToken>:$async_token)>{
+                                         Variadic<AnyType>:$launch_operands,
+                                         OptionalAttr<StrAttr>:$accelerator,
+                                         OptionalAttr<FlatSymbolRefAttr>:$fallback)>,
+                          Results<(outs Optional<RAIR_AsyncToken>:$async_token)>{
 //async_token作为该launch操作完成的信号：当操作执行完毕后，会发出该令牌，后续依赖该操作的异步任务可通过此令牌同步
   let summary = "Launch";
   let description = [{Launch}];
@@ -740,11 +762,11 @@ def LaunchOp : ROCC_Op<"launch", [  ROCC_AsyncOpInterface,
 //===----------------------------------------------------------------------===//
 // LaunchTerminatorOp
 //===----------------------------------------------------------------------===//
-def LaunchTerminatorOp : ROCC_Op<"launch_terminator", [HasParent<"LaunchOp">,
+def LaunchTerminatorOp : RAIR_Op<"launch_terminator", [HasParent<"LaunchOp">,
                                                           Pure,
                                                           Terminator]>,
                                     Arguments<(ins)>, Results<(outs)> {
-  let summary = "Terminator for `rocc.launch`.";
+  let summary = "Terminator for `rair.launch`.";
   let description = [{
     A terminator operation for the body of `air.launch` operations.
     `air.launch` operations are not expected to return any value so the
@@ -755,18 +777,18 @@ def LaunchTerminatorOp : ROCC_Op<"launch_terminator", [HasParent<"LaunchOp">,
 //===----------------------------------------------------------------------===//
 // HerdOp
 //===----------------------------------------------------------------------===//
-def HerdOp : ROCC_Op<"herd", [ ROCC_AsyncOpInterface, 
-                                ROCC_HierarchyInterface, 
+def HerdOp : RAIR_Op<"herd", [ RAIR_AsyncOpInterface, 
+                                RAIR_HierarchyInterface, 
                                 AttrSizedOperandSegments,                              
                                 IsolatedFromAbove,
                                 AffineScope,  
                                 SingleBlockImplicitTerminator<"HerdTerminatorOp">]>,
                           Arguments<(ins OptionalAttr<SymbolNameAttr>:$sym_name,
                                          OptionalAttr<StrAttr>:$link_with,
-                                         Variadic<ROCC_AsyncToken>:$async_dependencies,
+                                         Variadic<RAIR_AsyncToken>:$async_dependencies,
                                          Variadic<Index>:$sizes,
                                          Variadic<AnyType>:$herd_operands)>,                                        
-                          Results<(outs Optional<ROCC_AsyncToken>:$async_token)>{
+                          Results<(outs Optional<RAIR_AsyncToken>:$async_token)>{
   let summary = "Herd";
   let description = [{Herd}];
   let regions = (region SizedRegion<1>:$body);
@@ -840,14 +862,70 @@ def HerdOp : ROCC_Op<"herd", [ ROCC_AsyncOpInterface,
 //===----------------------------------------------------------------------===//
 // HerdTerminatorOp
 //===----------------------------------------------------------------------===//
-def HerdTerminatorOp : ROCC_Op<"herd_terminator", [HasParent<"HerdOp">,
+def HerdTerminatorOp : RAIR_Op<"herd_terminator", [HasParent<"HerdOp">,
                                                           Pure,
                                                           Terminator]>,
                                     Arguments<(ins)>, Results<(outs)> {
-  let summary = "Terminator for `rocc.herd`.";
+  let summary = "Terminator for `rair.herd`.";
   let description = [{
-    A terminator operation for the body of `rocc.herd` operations.
-    `rocc.herd` operations are not expected to return any value so the
+    A terminator operation for the body of `rair.herd` operations.
+    `rair.herd` operations are not expected to return any value so the
+    terminator takes no operands.
+  }];
+  let assemblyFormat = "attr-dict";
+}
+//===----------------------------------------------------------------------===//
+// KernelOp
+//===----------------------------------------------------------------------===//
+def KernelOp : RAIR_Op<"kernel", [
+    SingleBlockImplicitTerminator<"KernelTerminatorOp">]> {
+  let summary = "Structured accelerator kernel region";
+  let description = [{
+    Defines a structured kernel region for accelerator execution. The kernel
+    encapsulates one or more compute operations that should be executed as a
+    unit on the accelerator. Operations within this region are candidates for
+    fusion, scheduling, and accelerator-side optimization.
+
+    The `accelerator` attribute identifies which accelerator target this kernel
+    is intended for. The optional `fallback` attribute names a CPU-path function
+    to use if the kernel cannot be legally or profitably executed on the
+    accelerator. The optional `tile_size` and `dataflow` attributes carry
+    target-aware decomposition and scheduling preferences.
+
+    Example:
+    ```mlir
+    rair.kernel attributes {accelerator = "gemmini",
+                            fallback = @cpu_matmul,
+                            tile_size = array<i64: 16, 16, 16>,
+                            dataflow = "weight_stationary"} {
+      rair.matmul ins(%a, %b : memref<128x128xf32>, memref<128x128xf32>)
+                   outs(%c : memref<128x128xf32>)
+      rair.kernel_terminator
+    }
+    ```
+  }];
+
+  let arguments = (ins
+    OptionalAttr<StrAttr>:$accelerator,
+    OptionalAttr<FlatSymbolRefAttr>:$fallback,
+    OptionalAttr<DenseI64ArrayAttr>:$tile_size,
+    OptionalAttr<StrAttr>:$dataflow
+  );
+  let results = (outs);
+  let regions = (region SizedRegion<1>:$body);
+  let assemblyFormat = [{ attr-dict-with-keyword $body }];
+}
+//===----------------------------------------------------------------------===//
+// KernelTerminatorOp
+//===----------------------------------------------------------------------===//
+def KernelTerminatorOp : RAIR_Op<"kernel_terminator", [HasParent<"KernelOp">,
+                                                        Pure,
+                                                        Terminator]>,
+                                    Arguments<(ins)>, Results<(outs)> {
+  let summary = "Terminator for `rair.kernel`.";
+  let description = [{
+    A terminator operation for the body of `rair.kernel` operations.
+    `rair.kernel` operations are not expected to return any value so the
     terminator takes no operands.
   }];
   let assemblyFormat = "attr-dict";
@@ -855,8 +933,8 @@ def HerdTerminatorOp : ROCC_Op<"herd_terminator", [HasParent<"HerdOp">,
 //===----------------------------------------------------------------------===//
 // AllocOp
 //===----------------------------------------------------------------------===//
-def AllocOp: ROCC_Op<"alloc", []> {
-  let summary = "ROCC Allocation Op";
+def AllocOp: RAIR_Op<"alloc", []> {
+  let summary = "RAIR Allocation Op";
   let arguments = (ins);
   let results = (outs AnyMemRef:$result);
   let assemblyFormat = [{
@@ -870,8 +948,8 @@ def AllocOp: ROCC_Op<"alloc", []> {
 //===----------------------------------------------------------------------===//
 // DeallocOp
 //===----------------------------------------------------------------------===//
-def DeallocOp: ROCC_Op<"dealloc", []> {
-  let summary = "ROCC Deallocation Op";
+def DeallocOp: RAIR_Op<"dealloc", []> {
+  let summary = "RAIR Deallocation Op";
   let arguments = (ins AnyMemRef:$memref);
 
   let results = (outs);
@@ -879,21 +957,90 @@ def DeallocOp: ROCC_Op<"dealloc", []> {
     attr-dict $memref `:` type($memref)
   }];
   let description = [{
-    ROCC Deallocation Op
+    RAIR Deallocation Op
   }];
   // let hasCanonicalizer  = 1;
 }
 //===----------------------------------------------------------------------===//
+// TransferOp
+//===----------------------------------------------------------------------===//
+def TransferOp : RAIR_Op<"transfer", []> {
+  let summary = "Transfer data between memory spaces";
+  let description = [{
+    Explicitly transfers data between memory spaces (e.g., host DRAM to
+    accelerator scratchpad, or scratchpad to accumulator). Making transfers
+    explicit in IR enables redundant transfer elimination, transfer/compute
+    overlap, and memory lifetime analysis.
+
+    Example:
+    ```mlir
+    rair.transfer %host_buf to %accel_buf : memref<128x128xf32>
+    ```
+  }];
+
+  let arguments = (ins
+    AnyMemRef:$src,
+    AnyMemRef:$dst,
+    OptionalAttr<StrAttr>:$src_memory_space,
+    OptionalAttr<StrAttr>:$dst_memory_space
+  );
+  let results = (outs);
+  let assemblyFormat = [{ $src `to` $dst attr-dict `:` type($src) `,` type($dst) }];
+}
+//===----------------------------------------------------------------------===//
+// AllocBufferOp
+//===----------------------------------------------------------------------===//
+def AllocBufferOp : RAIR_Op<"alloc_buffer", []> {
+  let summary = "Allocate accelerator-visible buffer";
+  let description = [{
+    Allocates a buffer in an accelerator-visible memory space (e.g., scratchpad,
+    accumulator). The allocation is associated with an accelerator context,
+    enabling buffer lifetime analysis and memory reuse across kernels.
+
+    Example:
+    ```mlir
+    %buf = rair.alloc_buffer %ctx {memory_space = "scratchpad"}
+           : memref<128x128xf32>
+    ```
+  }];
+
+  let arguments = (ins
+    RAIR_Context:$context,
+    OptionalAttr<StrAttr>:$memory_space
+  );
+  let results = (outs AnyMemRef:$result);
+  let assemblyFormat = [{ $context attr-dict `:` type($result) }];
+}
+//===----------------------------------------------------------------------===//
+// DeallocBufferOp
+//===----------------------------------------------------------------------===//
+def DeallocBufferOp : RAIR_Op<"dealloc_buffer", []> {
+  let summary = "Deallocate accelerator-visible buffer";
+  let description = [{
+    Deallocates a buffer previously allocated in accelerator-visible memory.
+    Explicit deallocation enables deterministic buffer lifetime analysis.
+
+    Example:
+    ```mlir
+    rair.dealloc_buffer %ctx, %buf : memref<128x128xf32>
+    ```
+  }];
+
+  let arguments = (ins RAIR_Context:$context, AnyMemRef:$buffer);
+  let results = (outs);
+  let assemblyFormat = [{ $context `,` $buffer attr-dict `:` type($buffer) }];
+}
+//===----------------------------------------------------------------------===//
 // Template of *_DRV  
 //===----------------------------------------------------------------------===//
-class ROCC_DRV_Op<string opName> : ROCC_Op<opName,
-      [ROCC_AsyncOpInterface,
-       ROCC_MemcpyInterface,
+class RAIR_DRV_Op<string opName> : RAIR_Op<opName,
+      [RAIR_AsyncOpInterface,
+       RAIR_MemcpyInterface,
        AttrSizedOperandSegments]> {
 
   let summary = "dma operator";
   let arguments = (
-    ins Variadic<ROCC_AsyncToken>:$async_dependencies,
+    ins Variadic<RAIR_AsyncToken>:$async_dependencies,
         AnyRankedOrUnrankedMemRef:$dst,
         Variadic<Index>:$dst_offsets,
         Variadic<Index>:$dst_sizes,
@@ -904,7 +1051,7 @@ class ROCC_DRV_Op<string opName> : ROCC_Op<opName,
         Variadic<Index>:$src_strides
   );
 
-  let results = (outs Optional<ROCC_AsyncToken>:$async_token);
+  let results = (outs Optional<RAIR_AsyncToken>:$async_token);
 
   let assemblyFormat = [{
     custom<AsyncDependencies>(type($async_token), $async_dependencies)
@@ -932,17 +1079,17 @@ class ROCC_DRV_Op<string opName> : ROCC_Op<opName,
 //===----------------------------------------------------------------------===//
 // *_DRV OP
 //===----------------------------------------------------------------------===//
-def LoadDrvOp : ROCC_DRV_Op<"load">;
-def StoreDrvOp : ROCC_DRV_Op<"store">;
+def LoadDrvOp : RAIR_DRV_Op<"load">;
+def StoreDrvOp : RAIR_DRV_Op<"store">;
 
 
 //===----------------------------------------------------------------------===//
 // WaitAllOp
 //===----------------------------------------------------------------------===//
-def WaitAllOp: ROCC_Op<"wait_all", [ROCC_AsyncOpInterface]> {
-  let arguments = (ins Variadic<ROCC_AsyncToken>:$async_dependencies);
+def WaitAllOp: RAIR_Op<"wait_all", [RAIR_AsyncOpInterface]> {
+  let arguments = (ins Variadic<RAIR_AsyncToken>:$async_dependencies);
   let results = (
-    outs Optional<ROCC_AsyncToken>:$async_token
+    outs Optional<RAIR_AsyncToken>:$async_token
   );
 
   let summary = "wait for all operator";
@@ -950,7 +1097,7 @@ def WaitAllOp: ROCC_Op<"wait_all", [ROCC_AsyncOpInterface]> {
     Wait for all async tokens before preceding.
     Example:
         %0 = air.wait_all async 
-        %4 = rocc.wait_all async [%a4, %a5] 
+        %4 = rair.wait_all async [%a4, %a5] 
   }];
 
   let assemblyFormat = [{
@@ -966,10 +1113,70 @@ def WaitAllOp: ROCC_Op<"wait_all", [ROCC_AsyncOpInterface]> {
   // }];
   // let hasCanonicalizer = 1;
 }
+
+//===----------------------------------------------------------------------===//
+// AcquireOp
+//===----------------------------------------------------------------------===//
+def AcquireOp : RAIR_Op<"acquire", []> {
+  let summary = "Acquire accelerator execution context";
+  let description = [{
+    Acquires an accelerator execution context for a RoCC-style accelerator.
+    The context represents resource ownership and must be released with
+    `rair.release` when no longer needed.
+
+    Example:
+    ```mlir
+    %ctx = rair.acquire {accelerator = "gemmini"} : !rair.context
+    ```
+  }];
+
+  let arguments = (ins OptionalAttr<StrAttr>:$accelerator);
+  let results = (outs RAIR_Context:$context);
+  let assemblyFormat = [{ attr-dict `:` type($context) }];
+}
+//===----------------------------------------------------------------------===//
+// ReleaseOp
+//===----------------------------------------------------------------------===//
+def ReleaseOp : RAIR_Op<"release", []> {
+  let summary = "Release accelerator execution context";
+  let description = [{
+    Releases a previously acquired accelerator context, freeing associated
+    resources. All operations on the context must have completed before release.
+
+    Example:
+    ```mlir
+    rair.release %ctx : !rair.context
+    ```
+  }];
+
+  let arguments = (ins RAIR_Context:$context);
+  let results = (outs);
+  let assemblyFormat = [{ $context attr-dict `:` type($context) }];
+}
+//===----------------------------------------------------------------------===//
+// AwaitOp
+//===----------------------------------------------------------------------===//
+def AwaitOp : RAIR_Op<"await", []> {
+  let summary = "Wait for accelerator operations to complete";
+  let description = [{
+    Blocks until all pending accelerator operations associated with the given
+    context have completed. This makes synchronization an explicit, analyzable
+    program event rather than a hidden convention.
+
+    Example:
+    ```mlir
+    rair.await %ctx : !rair.context
+    ```
+  }];
+
+  let arguments = (ins RAIR_Context:$context);
+  let results = (outs);
+  let assemblyFormat = [{ $context attr-dict `:` type($context) }];
+}
 //===----------------------------------------------------------------------===//
 // QuantizationOp
 //===----------------------------------------------------------------------===//
-// def QuantizationOp : ROCC_Op<"quantization",
+// def QuantizationOp : RAIR_Op<"quantization",
 //     [Pure]> {
 //   let summary = "quantization operation";
 //   let description = [{
@@ -989,8 +1196,8 @@ def WaitAllOp: ROCC_Op<"wait_all", [ROCC_AsyncOpInterface]> {
 //         Quantized coefficients: [ 3.125 -1.25   0.625 -3.125  4.375]
 //   }];
 
-//   let arguments = (ins ROCCTensor:$input, ROCCTensor:$Nlevels, ROCCTensor:$max, ROCCTensor:$min);
-//   let results = (outs ROCCTensor);
+//   let arguments = (ins RAIRTensor:$input, RAIRTensor:$Nlevels, RAIRTensor:$max, RAIRTensor:$min);
+//   let results = (outs RAIRTensor);
 
 //   // Enable registering canonicalization patterns with this operation.
 //   // let hasCanonicalizer = 1;
@@ -1003,7 +1210,7 @@ def WaitAllOp: ROCC_Op<"wait_all", [ROCC_AsyncOpInterface]> {
 //   // Indicate that additional verification for this operation is necessary.
 //   // let hasVerifier = 1;
 // }
-// def DequantizationOp : ROCC_Op<"dequantization",
+// def DequantizationOp : RAIR_Op<"dequantization",
 //     [Pure]> {
 //   let summary = "dequantization operation";
 //   let description = [{
@@ -1022,8 +1229,8 @@ def WaitAllOp: ROCC_Op<"wait_all", [ROCC_AsyncOpInterface]> {
 //         Recovered coefficients: [ 3.125 -1.25   0.625 -3.125  4.375]
 //   }];
 
-//   let arguments = (ins ROCCTensor:$quant_input, ROCCTensor:$Nlevels, ROCCTensor:$max, ROCCTensor:$min);
-//   let results = (outs ROCCTensor);
+//   let arguments = (ins RAIRTensor:$quant_input, RAIRTensor:$Nlevels, RAIRTensor:$max, RAIRTensor:$min);
+//   let results = (outs RAIRTensor);
 
 //   let builders = [
 //     OpBuilder<(ins "mlir::Value":$quant_input, "mlir::Value":$Nlevels, "mlir::Value":$max, "mlir::Value":$min)>
@@ -1036,22 +1243,22 @@ def WaitAllOp: ROCC_Op<"wait_all", [ROCC_AsyncOpInterface]> {
 // FuncOp 
 //===----------------------------------------------------------------------===//
 
-def FuncOp : ROCC_Op<"func", [
+def FuncOp : RAIR_Op<"func", [
      FunctionOpInterface,IsolatedFromAbove
   ]> {
   let summary = "user defined function operation";
   let description = [{
-    The "rocc.func" operation represents a user defined function. These are
-    callable SSA-region operations that contain ROCC computations.
+    The "rair.func" operation represents a user defined function. These are
+    callable SSA-region operations that contain RAIR computations.
 
     Example:
 
     ```mlir
-    rocc.func @main() {
-      %0 = rocc.constant dense<5.500000e+00> : tensor<f64>
-      %1 = rocc.reshape(%0 : tensor<f64>) to tensor<2x2xf64>
-      rocc.print %1 : tensor<2x2xf64>
-      rocc.return
+    rair.func @main() {
+      %0 = rair.constant dense<5.500000e+00> : tensor<f64>
+      %1 = rair.reshape(%0 : tensor<f64>) to tensor<2x2xf64>
+      rair.print %1 : tensor<2x2xf64>
+      rair.return
     }
     ```
   }];
@@ -1089,7 +1296,7 @@ def FuncOp : ROCC_Op<"func", [
 // ReturnOp
 //===----------------------------------------------------------------------===//
 
-def ReturnOp : ROCC_Op<"return", [Pure, HasParent<"FuncOp">,
+def ReturnOp : RAIR_Op<"return", [Pure, HasParent<"FuncOp">,
                                  Terminator]> {
   let summary = "return operation";
   let description = [{
@@ -1099,16 +1306,16 @@ def ReturnOp : ROCC_Op<"return", [Pure, HasParent<"FuncOp">,
     the operation. For example:
 
     ```mlir
-      rocc.func @foo() -> tensor<2xf64> {
+      rair.func @foo() -> tensor<2xf64> {
         ...
-        rocc.return %0 : tensor<2xf64>
+        rair.return %0 : tensor<2xf64>
       }
     ```
   }];
 
   // The return operation takes an optional input operand to return. This
   // value must match the return type of the enclosing function.
-  let arguments = (ins Variadic<ROCCTensor>:$input);
+  let arguments = (ins Variadic<RAIRTensor>:$input);
 
   // The return operation only emits the input in the format if it is present.
   let assemblyFormat = "($input^ `:` type($input))? attr-dict ";
@@ -1130,7 +1337,7 @@ def ReturnOp : ROCC_Op<"return", [Pure, HasParent<"FuncOp">,
 // Base class for NCHW pooling ops   
 //===----------------------------------------------------------------------===//
 class PoolingNchwBaseOp<string mnemonic, string opDoc>
-  : ROCC_Op<mnemonic, [Pure]> {
+  : RAIR_Op<mnemonic, [Pure]> {
 
   let summary = opDoc;
   let description = [{
@@ -1148,7 +1355,7 @@ class PoolingNchwBaseOp<string mnemonic, string opDoc>
 
     Example:
     ```mlir
-    rocc.}] # mnemonic # [{
+    rair.}] # mnemonic # [{
       {dilations = dense<[1, 1]> : vector<2xi64>,
        strides   = dense<[2, 2]> : vector<2xi64>}
       ins(%input, %kernel : memref<1x64x114x114xf32>, memref<3x3xf32>)
@@ -1161,7 +1368,10 @@ class PoolingNchwBaseOp<string mnemonic, string opDoc>
     AnyMemRef:$kernel,
     AnyMemRef:$output,
     TypedAttrInterface:$dilations,
-    TypedAttrInterface:$strides
+    TypedAttrInterface:$strides,
+    OptionalAttr<StrAttr>:$accelerator,
+    OptionalAttr<DenseI64ArrayAttr>:$tile_size,
+    OptionalAttr<StrAttr>:$dataflow
   );
 
   let results = (outs);
@@ -1194,10 +1404,10 @@ def Conv2dNchwFchwOp
 //===----------------------------------------------------------------------===//
 // WorldOp 
 //===----------------------------------------------------------------------===//
-def WorldOp : ROCC_Op<"world", [Pure]> {
-    let summary = "print ROCC, World";
+def WorldOp : RAIR_Op<"world", [Pure]> {
+    let summary = "print RAIR, World";
     let description = [{
-        The "world" operation prints "ROCC, World", and produces
+        The "world" operation prints "RAIR, World", and produces
         no results.
     }];
 }

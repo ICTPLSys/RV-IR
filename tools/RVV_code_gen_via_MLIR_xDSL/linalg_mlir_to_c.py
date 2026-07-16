@@ -149,13 +149,13 @@ def _emit_vp_vs_mul_scalar_broadcast(
     lines.append("  }")
 
 
-def lower_rocc_frontend_ops_to_linalg(mlir: str) -> str:
+def lower_rair_frontend_ops_to_linalg(mlir: str) -> str:
     """
-    Map RoCC named ops that mirror linalg (MNIST RoCC graphs) to linalg so the
+    Map RAIR named ops that mirror linalg (MNIST RAIR graphs) to linalg so the
     existing linalg lowers and C backend produce the same code as linalg-only input.
     """
-    s = re.sub(r"\brocc\.pooling_nchw_max\b", "linalg.pooling_nchw_max", mlir)
-    s = re.sub(r"\brocc\.matmul\b", "linalg.matmul", s)
+    s = re.sub(r"\brair\.pooling_nchw_max\b", "linalg.pooling_nchw_max", mlir)
+    s = re.sub(r"\brair\.matmul\b", "linalg.matmul", s)
 
     def _transpose_brace_array(m: re.Match) -> str:
         ins_part = m.group(1).strip()
@@ -166,12 +166,12 @@ def lower_rocc_frontend_ops_to_linalg(mlir: str) -> str:
         )
 
     s = re.sub(
-        r"rocc\.transpose\s+ins\(([^)]+)\)\s+outs\(([^)]+)\)\s*\{\s*permutation\s*=\s*array<i64:\s*([^>]+)>\s*\}",
+        r"rair\.transpose\s+ins\(([^)]+)\)\s+outs\(([^)]+)\)\s*\{\s*permutation\s*=\s*array<i64:\s*([^>]+)>\s*\}",
         _transpose_brace_array,
         s,
         flags=re.MULTILINE,
     )
-    s = re.sub(r"\brocc\.transpose\b", "linalg.transpose", s)
+    s = re.sub(r"\brair\.transpose\b", "linalg.transpose", s)
     return s
 
 
@@ -212,12 +212,12 @@ def process_mlir_file(
         mlir_content = f.read()
     mlir_content_original = mlir_content
 
-    mlir_content = lower_rocc_frontend_ops_to_linalg(mlir_content)
+    mlir_content = lower_rair_frontend_ops_to_linalg(mlir_content)
 
-    # Preprocess MLIR: convert custom RoCC format to generic format if needed
-    if re.search(r"rocc\.(batch_matmul|transpose).*ins\(", mlir_content):
+    # Preprocess MLIR: convert custom RAIR format to generic format if needed
+    if re.search(r"rair\.(batch_matmul|transpose).*ins\(", mlir_content):
         if verbose:
-            print("[INFO] Converting custom RoCC format to generic format...")
+            print("[INFO] Converting custom RAIR format to generic format...")
 
         try:
             import tempfile
@@ -240,10 +240,10 @@ def process_mlir_file(
             os.unlink(tmp_path)
 
             if verbose:
-                print("[INFO] RoCC format conversion complete")
+                print("[INFO] RAIR format conversion complete")
         except Exception as e:
             if verbose:
-                print(f"[WARNING] RoCC format conversion failed: {e}")
+                print(f"[WARNING] RAIR format conversion failed: {e}")
                 print("[INFO] Trying to parse original file...")
 
     # Preprocess MLIR: handle memref.copy operations
@@ -350,7 +350,7 @@ def process_mlir_file(
             mlir_content,
         )
 
-    # Note: rocc.* batch_matmul / transpose are supported through the RoCC dialect.
+    # Note: rair.* batch_matmul / transpose are supported through the RAIR dialect.
 
     if verbose:
         print("[INFO] Step 1: Parsing MLIR input...")
@@ -366,23 +366,23 @@ def process_mlir_file(
     ctx.load_dialect(math.Math)
     ctx.load_dialect(emitc.EmitC)
 
-    rocc_available = False
+    rair_available = False
     try:
-        from xdsltemplate.dialects.riscv import ROCC
-        from xdsltemplate.transforms.riscv_to_emitc import RoCCToEmitCPass
+        from xdsltemplate.dialects.riscv import RAIR
+        from xdsltemplate.transforms.riscv_to_emitc import RAIRToEmitCPass
 
-        ctx.load_dialect(ROCC)
-        rocc_available = True
+        ctx.load_dialect(RAIR)
+        rair_available = True
         if verbose:
-            print("[INFO] RoCC dialect loaded successfully")
+            print("[INFO] RAIR dialect loaded successfully")
     except ImportError:
         if verbose:
             print(
-                "[WARNING] RoCC dialect not available, only linalg.generic operations will be supported"
+                "[WARNING] RAIR dialect not available, only linalg.generic operations will be supported"
             )
     except Exception as e:
         if verbose:
-            print(f"[WARNING] Failed to load RoCC dialect: {e}")
+            print(f"[WARNING] Failed to load RAIR dialect: {e}")
 
     # Parse-time fallback only for named ops that may still fail to parse in
     # some xDSL builds. conv_2d is handled by the linalg dialect + emitc pass.
@@ -445,12 +445,12 @@ def process_mlir_file(
     # Step 2: Apply transformation passes
     # ================================================================
 
-    has_rocc_opaque_ops = '"rocc.' in mlir_content
+    has_rair_opaque_ops = '"rair.' in mlir_content
 
     if verbose:
         print("[INFO] Step 2: Applying transformation passes...")
-        if has_rocc_opaque_ops:
-            print("[INFO] RoCC operations detected, will use strategy code generator")
+        if has_rair_opaque_ops:
+            print("[INFO] RAIR operations detected, will use strategy code generator")
 
     pass_pipeline = [
         # ("rmsnorm-optimization", RMSNormOptimizationPass()),  # TODO: Fix insertion point issue - disabled for now
@@ -461,16 +461,16 @@ def process_mlir_file(
         (
             "memref-to-emitc-casts",
             MemRefToEmitCPass(),
-        ),  # 创建指针 casts (必须在 rocc-to-emitc 之前!)
-        ("rocc-to-emitc", RoCCToEmitCPass())
-        if rocc_available
-        else None,  # 转换 rocc 操作 (在 memref-to-emitc 之后!)
+        ),  # 创建指针 casts (必须在 rair-to-emitc 之前!)
+        ("rair-to-emitc", RAIRToEmitCPass())
+        if rair_available
+        else None,  # 转换 rair 操作 (在 memref-to-emitc 之后!)
         ("memref-to-emitc-funcs", ConvertMemRefFuncSignatures()),  # 转换函数签名
         ("remove-unrealized-casts", RemoveUnrealizedCasts()),  # 移除 no-op casts
         ("arith-to-emitc", ArithToEmitCPass()),  # 转换 arith 操作
     ]
 
-    # Filter out None values (when RoCC is not available)
+    # Filter out None values (when RAIR is not available)
     pass_pipeline = [
         (name, pass_) for name, pass_ in pass_pipeline if pass_ is not None
     ]
@@ -523,9 +523,9 @@ def process_mlir_file(
         # Generate C code from transformed MLIR
         # Pass original MLIR content to parse function signatures correctly
 
-        if has_rocc_opaque_ops:
+        if has_rair_opaque_ops:
             if verbose:
-                print("[INFO] Using strategy code generator for RoCC operations")
+                print("[INFO] Using strategy code generator for RAIR operations")
             c_code = generate_c_with_strategy(
                 transformed_mlir, strategy_name="simple", verbose=verbose
             )
