@@ -30,6 +30,10 @@
 
 // #include "torch-mlir/Dialect/RISCV/IR/RISCVOpsDialect.h.inc"
 #include "torch-mlir/Dialect/RISCV/IR/RISCVDialect.h.inc"
+#include "torch-mlir/Dialect/RISCV/IR/RISCVEnums.h.inc"
+
+#define GET_ATTRDEF_CLASSES
+#include "torch-mlir/Dialect/RISCV/IR/RISCVAttributes.h.inc"
 
 using namespace mlir;
 

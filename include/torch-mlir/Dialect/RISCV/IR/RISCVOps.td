@@ -49,7 +49,7 @@ def ConstantOp : RAIR_Op<"constant", [Pure]> {
 //===----------------------------------------------------------------------===//
 // PrintOp
 //===----------------------------------------------------------------------===//
-def PrintOp : RAIR_Op<"print", [Pure]> {
+def PrintOp : RAIR_Op<"print", [MemoryEffects<[MemWrite]>]> {
     let summary = "print operation";
     let description = [{
       The "print" builtin operation prints a given input tensor, and produces
@@ -71,7 +71,7 @@ def PrintOp : RAIR_Op<"print", [Pure]> {
 //===----------------------------------------------------------------------===//
 // MatMulOp
 //===----------------------------------------------------------------------===//
-def MatmulOp : RAIR_Op<"matmul", [Pure]> {
+def MatmulOp : RAIR_Op<"matmul"> {
     let summary = [{
       Performs a matrix multiplication of two 2D inputs without broadcast or transpose.
     }];
@@ -88,7 +88,14 @@ def MatmulOp : RAIR_Op<"matmul", [Pure]> {
       ```
     }];
 
-    let arguments = (ins AnyMemRef:$lhs, AnyMemRef:$rhs, AnyMemRef:$output,
+    let arguments = (ins
+                         Arg<AnyMemRef, "left-hand side",
+                             [MemReadAt<0, FullEffect>]>:$lhs,
+                         Arg<AnyMemRef, "right-hand side",
+                             [MemReadAt<0, FullEffect>]>:$rhs,
+                         Arg<AnyMemRef, "destination",
+                             [MemReadAt<0, FullEffect>,
+                              MemWriteAt<1, FullEffect>]>:$output,
                          OptionalAttr<StrAttr>:$accelerator,
                          OptionalAttr<DenseI64ArrayAttr>:$tile_size,
                          OptionalAttr<StrAttr>:$dataflow);
@@ -98,6 +105,7 @@ def MatmulOp : RAIR_Op<"matmul", [Pure]> {
     let builders = [
       OpBuilder<(ins "mlir::Value":$lhs, "mlir::Value":$rhs)>
     ];
+    let hasVerifier = 1;
     let assemblyFormat = [{
     `ins` `(` $lhs `,` $rhs `:` type($lhs) `,` type($rhs) `)`
     `outs` `(` $output `:` type($output) `)`
@@ -109,7 +117,7 @@ def MatmulOp : RAIR_Op<"matmul", [Pure]> {
 //===----------------------------------------------------------------------===//
 // BatchMatMulOp
 //===----------------------------------------------------------------------===//
-def BatchMatMulOp : RAIR_Op<"batch_matmul", [Pure]> {
+def BatchMatMulOp : RAIR_Op<"batch_matmul"> {
   let summary = [{
     Performs an in-place batch matrix multiplication.
   }];
@@ -130,11 +138,19 @@ def BatchMatMulOp : RAIR_Op<"batch_matmul", [Pure]> {
   }];
 
   // In-place semantics: no results
-  let arguments = (ins AnyMemRef:$lhs, AnyMemRef:$rhs, AnyMemRef:$output,
+  let arguments = (ins
+                       Arg<AnyMemRef, "left-hand side",
+                           [MemReadAt<0, FullEffect>]>:$lhs,
+                       Arg<AnyMemRef, "right-hand side",
+                           [MemReadAt<0, FullEffect>]>:$rhs,
+                       Arg<AnyMemRef, "destination",
+                           [MemReadAt<0, FullEffect>,
+                            MemWriteAt<1, FullEffect>]>:$output,
                        OptionalAttr<StrAttr>:$accelerator,
                        OptionalAttr<DenseI64ArrayAttr>:$tile_size,
                        OptionalAttr<StrAttr>:$dataflow);
   let results = (outs);
+  let hasVerifier = 1;
 
   let assemblyFormat = [{
     `ins` `(` $lhs `,` $rhs `:` type($lhs) `,` type($rhs) `)`
@@ -226,7 +242,7 @@ def ReduceOp : RAIR_Op<"reduce", [Pure]> {
 // TransposeOp
 //===----------------------------------------------------------------------===//
 
-def TransposeOp : RAIR_Op<"transpose", [Pure]> {
+def TransposeOp : RAIR_Op<"transpose"> {
     // [Pure, DeclareOpInterfaceMethods<ShapeInferenceOpInterface>]> {
 
   let summary = "transpose operation";
@@ -237,8 +253,8 @@ def TransposeOp : RAIR_Op<"transpose", [Pure]> {
       ```
   }];
   let arguments = (ins
-    AnyMemRef :$input,
-    AnyMemRef :$init,
+    Arg<AnyMemRef, "input", [MemReadAt<0, FullEffect>]>:$input,
+    Arg<AnyMemRef, "destination", [MemWriteAt<1, FullEffect>]>:$init,
     DenseI64ArrayAttr:$permutation,  // 转置维度
     OptionalAttr<StrAttr>:$accelerator
   );
@@ -936,7 +952,8 @@ def KernelTerminatorOp : RAIR_Op<"kernel_terminator", [HasParent<"KernelOp">,
 def AllocOp: RAIR_Op<"alloc", []> {
   let summary = "RAIR Allocation Op";
   let arguments = (ins);
-  let results = (outs AnyMemRef:$result);
+  let results = (outs Res<AnyMemRef, "",
+                          [MemAlloc<DefaultResource, 0, FullEffect>]>:$result);
   let assemblyFormat = [{
     attr-dict `:` type($result)
   }];
@@ -950,7 +967,8 @@ def AllocOp: RAIR_Op<"alloc", []> {
 //===----------------------------------------------------------------------===//
 def DeallocOp: RAIR_Op<"dealloc", []> {
   let summary = "RAIR Deallocation Op";
-  let arguments = (ins AnyMemRef:$memref);
+  let arguments = (ins Arg<AnyMemRef, "",
+                           [MemFreeAt<0, FullEffect>]>:$memref);
 
   let results = (outs);
   let assemblyFormat = [{
@@ -979,12 +997,13 @@ def TransferOp : RAIR_Op<"transfer", []> {
   }];
 
   let arguments = (ins
-    AnyMemRef:$src,
-    AnyMemRef:$dst,
-    OptionalAttr<StrAttr>:$src_memory_space,
-    OptionalAttr<StrAttr>:$dst_memory_space
+    Arg<AnyMemRef, "source", [MemReadAt<0, FullEffect>]>:$src,
+    Arg<AnyMemRef, "destination", [MemWriteAt<1, FullEffect>]>:$dst,
+    OptionalAttr<RAIR_MemorySpaceAttr>:$src_memory_space,
+    OptionalAttr<RAIR_MemorySpaceAttr>:$dst_memory_space
   );
   let results = (outs);
+  let hasVerifier = 1;
   let assemblyFormat = [{ $src `to` $dst attr-dict `:` type($src) `,` type($dst) }];
 }
 //===----------------------------------------------------------------------===//
@@ -999,16 +1018,18 @@ def AllocBufferOp : RAIR_Op<"alloc_buffer", []> {
 
     Example:
     ```mlir
-    %buf = rair.alloc_buffer %ctx {memory_space = "scratchpad"}
-           : memref<128x128xf32>
+    %buf = rair.alloc_buffer %ctx {memory_space = #rair.space<lmem>}
+           : memref<128x128xf32, #rair.space<lmem>>
     ```
   }];
 
   let arguments = (ins
     RAIR_Context:$context,
-    OptionalAttr<StrAttr>:$memory_space
+    OptionalAttr<RAIR_MemorySpaceAttr>:$memory_space
   );
-  let results = (outs AnyMemRef:$result);
+  let results = (outs Res<AnyMemRef, "",
+                          [MemAlloc<DefaultResource, 0, FullEffect>]>:$result);
+  let hasVerifier = 1;
   let assemblyFormat = [{ $context attr-dict `:` type($result) }];
 }
 //===----------------------------------------------------------------------===//
@@ -1026,7 +1047,9 @@ def DeallocBufferOp : RAIR_Op<"dealloc_buffer", []> {
     ```
   }];
 
-  let arguments = (ins RAIR_Context:$context, AnyMemRef:$buffer);
+  let arguments = (ins RAIR_Context:$context,
+                       Arg<AnyMemRef, "",
+                           [MemFreeAt<0, FullEffect>]>:$buffer);
   let results = (outs);
   let assemblyFormat = [{ $context `,` $buffer attr-dict `:` type($buffer) }];
 }
@@ -1041,11 +1064,13 @@ class RAIR_DRV_Op<string opName> : RAIR_Op<opName,
   let summary = "dma operator";
   let arguments = (
     ins Variadic<RAIR_AsyncToken>:$async_dependencies,
-        AnyRankedOrUnrankedMemRef:$dst,
+        Arg<AnyRankedOrUnrankedMemRef, "destination",
+            [MemWriteAt<1, FullEffect>]>:$dst,
         Variadic<Index>:$dst_offsets,
         Variadic<Index>:$dst_sizes,
         Variadic<Index>:$dst_strides,
-        AnyRankedOrUnrankedMemRef:$src,
+        Arg<AnyRankedOrUnrankedMemRef, "source",
+            [MemReadAt<0, FullEffect>]>:$src,
         Variadic<Index>:$src_offsets,
         Variadic<Index>:$src_sizes,
         Variadic<Index>:$src_strides
@@ -1337,7 +1362,7 @@ def ReturnOp : RAIR_Op<"return", [Pure, HasParent<"FuncOp">,
 // Base class for NCHW pooling ops   
 //===----------------------------------------------------------------------===//
 class PoolingNchwBaseOp<string mnemonic, string opDoc>
-  : RAIR_Op<mnemonic, [Pure]> {
+  : RAIR_Op<mnemonic> {
 
   let summary = opDoc;
   let description = [{
@@ -1364,9 +1389,11 @@ class PoolingNchwBaseOp<string mnemonic, string opDoc>
   }];
 
   let arguments = (ins
-    AnyMemRef:$input,
-    AnyMemRef:$kernel,
-    AnyMemRef:$output,
+    Arg<AnyMemRef, "input", [MemReadAt<0, FullEffect>]>:$input,
+    Arg<AnyMemRef, "kernel", [MemReadAt<0, FullEffect>]>:$kernel,
+    Arg<AnyMemRef, "destination",
+        [MemReadAt<0, FullEffect>,
+         MemWriteAt<1, FullEffect>]>:$output,
     TypedAttrInterface:$dilations,
     TypedAttrInterface:$strides,
     OptionalAttr<StrAttr>:$accelerator,
@@ -1404,7 +1431,7 @@ def Conv2dNchwFchwOp
 //===----------------------------------------------------------------------===//
 // WorldOp 
 //===----------------------------------------------------------------------===//
-def WorldOp : RAIR_Op<"world", [Pure]> {
+def WorldOp : RAIR_Op<"world", [MemoryEffects<[MemWrite]>]> {
     let summary = "print RAIR, World";
     let description = [{
         The "world" operation prints "RAIR, World", and produces

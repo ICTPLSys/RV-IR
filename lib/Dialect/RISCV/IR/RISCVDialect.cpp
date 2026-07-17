@@ -54,6 +54,10 @@ void RAIRDialect::initialize() {
 #define GET_OP_LIST
 #include "torch-mlir/Dialect/RISCV/IR/RISCVOps.cpp.inc"
       >();
+  addAttributes<
+#define GET_ATTRDEF_LIST
+#include "torch-mlir/Dialect/RISCV/IR/RISCVAttributes.cpp.inc"
+      >();
 
 }
 
@@ -705,3 +709,7 @@ mlir::Operation *RAIRDialect::materializeConstant(mlir::OpBuilder &builder,
   return builder.create<rair::ConstantOp>(
       loc, type, mlir::cast<mlir::DenseElementsAttr>(value));
 }
+
+#include "torch-mlir/Dialect/RISCV/IR/RISCVEnums.cpp.inc"
+#define GET_ATTRDEF_CLASSES
+#include "torch-mlir/Dialect/RISCV/IR/RISCVAttributes.cpp.inc"

@@ -3,6 +3,8 @@ mlir_tablegen(RISCVOpInterfaces.h.inc -gen-op-interface-decls)
 mlir_tablegen(RISCVOpInterfaces.cpp.inc -gen-op-interface-defs)
 mlir_tablegen(RISCVEnums.h.inc -gen-enum-decls)
 mlir_tablegen(RISCVEnums.cpp.inc -gen-enum-defs)
+mlir_tablegen(RISCVAttributes.h.inc -gen-attrdef-decls)
+mlir_tablegen(RISCVAttributes.cpp.inc -gen-attrdef-defs)
 add_public_tablegen_target(RISCVOpInterfacesIncGen)
 
 #add_mlir_dialect(RISCVOps riscv)
@@ -19,4 +21,3 @@ add_dependencies(mlir-headers MLIRRISCVOpsIncGen)
 
 add_mlir_doc(RISCVDialect RISCVDialect RISCV/ -gen-dialect-doc)
 add_mlir_doc(RISCVOps RISCVOps RISCV/ -gen-op-doc)
-

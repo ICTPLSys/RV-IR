@@ -44,6 +44,7 @@
 #include "torch-mlir/Conversion/RISCVPasses.h"
 #include "torch-mlir/Dialect/RISCV/IR/RISCVOps.h"
 #include "torch-mlir/Dialect/RISCV/IR/RISCVDialect.h"
+#include "torch-mlir/Dialect/RISCV/Transforms/RISCVPasses.h"
 
 
 void mlir::torch::registerAllDialects(mlir::DialectRegistry &registry) {  
@@ -77,6 +78,7 @@ void mlir::torch::registerAllPasses() {
   mlir::torch::registerTorchConversionPasses();
 
   mlir::torch::registerConversionPasses();
+  rair::registerRAIRPasses();
   rair::registerRAIRConversionPasses();    //注册RISCV的转换Pass
   cim::registerCIMConversionPasses();    //注册RISCV的转换Pass
 

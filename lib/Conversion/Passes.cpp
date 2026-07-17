@@ -26,9 +26,7 @@
 #endif // TORCH_MLIR_ENABLE_TOSA
 
 #include "torch-mlir/Conversion/LinalgToRISCV/LinalgToRISCV.h"
-#include "torch-mlir/Conversion/RISCVToAffine/RISCVToAffine.h"
 #include "torch-mlir/Conversion/RISCVToLLVM/RISCVToLLVM.h"
-#include "torch-mlir/Conversion/RISCVToCIM/RISCVToCIM.h"
 #include "torch-mlir/Conversion/CIMToLLVM/CIMToLLVM.h"
 
 #include "torch-mlir/Dialect/RISCV/IR/RISCVOps.h"
@@ -56,7 +54,6 @@ namespace rair {
 void registerRAIRConversionPasses() {
   // 注册RISCV相关的转换Pass
   registerConvertLinalgToRAIRPass();  
-  registerConvertRAIRToAffinePass(); 
   registerConvertRAIRToLLVMPass();   
 }
 } // namespace rair
@@ -64,7 +61,6 @@ void registerRAIRConversionPasses() {
 
 namespace cim {
 void registerCIMConversionPasses() {  
-  registerConvertRAIRToCIMPass();  
   registerConvertCIMToLLVMPass();  
 }
 } // namespace cim
@@ -74,5 +70,4 @@ void mlir::torch::registerConversionPasses() {
     cim::registerCIMConversionPasses();  
     ::registerPasses(); 
 }
-
 

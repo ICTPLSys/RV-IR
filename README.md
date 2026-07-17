@@ -147,9 +147,12 @@ pip install --pre torch-mlir torchvision \
       ```shell
       ./bin/llvm-lit -v ../test/Conversion/RISCVToLLVM/add.mlir
       ```
-    - **...run the MLIR-to-LLVM lowering pipeline test**, run:
+    - **...run the Linalg-to-RAIR lowering**, run:
       ```shell
-      ./bin/torch-mlir-opt --convert-linalg-to-riscv --convert-riscv-to-affine --convert-riscv-to-llvm\ ../test/Conversion/RISCVToLLVM/add.mlir >> add.ll
+      ./bin/torch-mlir-opt \
+        --convert-linalg-to-rair \
+        --rair-verify-lifetimes \
+        ../test/Conversion/LinalgToRISCV/matmul.mlir
       ```
     - **...Execute the code with LLVM interpreter**, run:
       ```shell

@@ -25,11 +25,11 @@
 #include "mlir/Interfaces/FunctionInterfaces.h"
 #include "mlir/Interfaces/SideEffectInterfaces.h"
 #include "mlir/Dialect/Utils/IndexingUtils.h"
+#include "torch-mlir/Dialect/RISCV/IR/RISCVDialect.h"
 
 // #define GET_TYPEDEF_CLASSES
 // #include "RISCV/RISCVOpsTypes.h.inc"
 #include "torch-mlir/Dialect/RISCV/IR/RISCVOpInterfaces.h.inc"
-#include "torch-mlir/Dialect/RISCV/IR/RISCVEnums.h.inc"
 
 #define GET_OP_CLASSES
 #include "torch-mlir/Dialect/RISCV/IR/RISCVOps.h.inc"

@@ -19,7 +19,6 @@ target_link_libraries(torch-mlir-opt PRIVATE
   MLIRCIMDialect
   MLIRLinalgToRISCV
   MLIRLinalgToStandard
-  MLIRRISCVToAffine
   MLIRRISCVToLLVM
   MLIRAffineToStandard
   MLIRSCFToControlFlow

@@ -19,7 +19,7 @@ RAIR sits between high-level MLIR compute dialects and lower backend dialects:
 ```text
 Torch / Linalg / MemRef / Tensor
   -> RAIR
-  -> Affine / Async / LLVM / CIM / accelerator-specific lowering
+  -> RAIR Core/Plan-aware target lowering
 ```
 
 The design intent is to make accelerator interface semantics explicit in IR.
@@ -58,12 +58,14 @@ The core dialect implementation is spread across the following files:
   materialization.
 - `lib/Conversion/LinalgToRISCV/LinalgToRISCV.cpp`: upper lowering from Linalg
   and MemRef into RAIR.
-- `lib/Conversion/RISCVToAffine/LowerToAffine.cpp`: CPU-style lowering from
-  RAIR compute and utility ops to Affine/Arith/SCF/Async.
-- `lib/Conversion/RISCVToCIM/RISCVToCIM.cpp`: accelerator-style lowering from
-  selected RAIR ops to CIM/RISC-V intrinsic calls.
+- `lib/Dialect/RISCV/Transforms/VerifyLifetimes.cpp`: straight-line context and
+  accelerator-buffer ownership verification.
 - `lib/Conversion/RISCVToLLVM/LowerToLLVM.cpp`: utility lowering for
   `rair.print` and `rair.world` to LLVM/printf.
+
+The obsolete RAIR-to-Affine and RAIR-to-CIM conversion paths have been
+removed. New execution lowering should consume the RAIR Core/Plan contract
+instead of extending those legacy paths.
 
 The existing operation reference in `docs/rair_ops_design.md` is a companion
 document. This document focuses on the dialect-level design rather than listing
@@ -152,11 +154,14 @@ The dialect also defines a `MemorySpace` enum:
 - `SPAD0 = 5`
 - `GMEM = 6`
 
-In the current operation definitions, memory space is sometimes represented by
-string attributes such as `"GMEM"` and `"LMEM"` rather than this enum. This is a
-practical implementation detail to be aware of when writing or extending passes.
-Long term, using a single representation would make verification and lowering
-cleaner.
+The canonical textual representation is the typed attribute
+`#rair.space<name>`, for example `#rair.space<gmem>` and
+`#rair.space<lmem>`. `rair.alloc_buffer` and `rair.transfer` use this attribute
+for operation metadata. When a memref type declares an explicit memory space,
+the verifier requires it to agree with the corresponding operation attribute.
+An omitted memref memory space remains legal, which lets upper lowering retain
+existing function signatures while transfer attributes make the boundary
+placement explicit.
 
 Many compute operations accept optional target attributes:
 
@@ -268,27 +273,49 @@ release context
 This post-processing is important because it turns RAIR into a representation of
 accelerator interface behavior, not only accelerator compute behavior.
 
-## Downstream Lowering Paths
+## Linear Resource Lifetime Contract
 
-RAIR has multiple downstream paths:
+The Phase 0 lifetime verifier is available as:
 
 ```bash
---convert-rair-to-affine
---convert-rair-to-cim
---convert-rair-to-llvm
+--rair-verify-lifetimes
 ```
 
-The Affine path lowers many RAIR compute operations into loops and standard MLIR
-arithmetic/memory operations. It is useful as a CPU-style executable path and as
-a correctness-oriented lowering.
+A typical upper pipeline is therefore:
 
-The CIM path lowers selected accelerator operations to intrinsic-like calls such
-as `llvm.riscv.vv.v.drv`, `llvm.riscv.conv.drv`, `llvm.riscv.trans.drv`,
-`llvm.riscv.load`, `llvm.riscv.store`, and `llvm.riscv.sync`. This path is the
-accelerator-oriented backend direction.
+```bash
+torch-mlir-opt input.mlir \
+  --convert-linalg-to-rair \
+  --rair-verify-lifetimes
+```
 
-The LLVM path currently focuses on utility operations such as `rair.print` and
-`rair.world`, lowering them to `printf`-style LLVM calls. It is not the full
+The pass distinguishes owned resources from borrowed function arguments:
+
+- A context returned by `rair.acquire` is owned and must have exactly one
+  `rair.release` in the same straight-line function block.
+- A buffer returned by `rair.alloc_buffer` is owned and must have exactly one
+  `rair.dealloc_buffer` in that block.
+- The deallocation context must be the same SSA value used for allocation.
+- Context and buffer uses after their release are rejected.
+- Releasing a borrowed context argument or deallocating a borrowed buffer
+  argument is rejected. A borrowed context may still own a locally allocated
+  buffer, provided that buffer is deallocated with the same context.
+
+This first verifier is intentionally conservative. Owned resources may not
+cross calls, returns, CFG branches, loops, nested regions, or derived memref
+aliases. Each such case receives an explicit unsupported diagnostic rather than
+being silently accepted. Control flow that does not capture or contain RAIR
+resources remains legal. A future dataflow analysis can extend the contract to
+path-sensitive and interprocedural ownership without weakening this baseline.
+
+## Downstream Lowering
+
+The legacy RAIR-to-Affine and RAIR-to-CIM paths have been removed. Future
+target lowering must consume the RAIR Core/Plan contract so that scheduling,
+resource demand, and effect ordering are not bypassed by direct op rewrites.
+
+`--convert-rair-to-llvm` remains for utility operations such as `rair.print`
+and `rair.world`, lowering them to `printf`-style LLVM calls. It is not a full
 RAIR compute lowering path by itself.
 
 ## Example Design Flow
@@ -304,23 +331,32 @@ into a RAIR form that contains:
 
 ```mlir
 %ctx = rair.acquire {accelerator = "default"} : !rair.context
-%lhs_lmem = rair.alloc_buffer %ctx {memory_space = "LMEM"} : memref<16x32xf32>
-%rhs_lmem = rair.alloc_buffer %ctx {memory_space = "LMEM"} : memref<32x64xf32>
-%out_lmem = rair.alloc_buffer %ctx {memory_space = "LMEM"} : memref<16x64xf32>
+%lhs_lmem = rair.alloc_buffer %ctx {memory_space = #rair.space<lmem>} : memref<16x32xf32, #rair.space<lmem>>
+%rhs_lmem = rair.alloc_buffer %ctx {memory_space = #rair.space<lmem>} : memref<32x64xf32, #rair.space<lmem>>
+%out_lmem = rair.alloc_buffer %ctx {memory_space = #rair.space<lmem>} : memref<16x64xf32, #rair.space<lmem>>
 
 rair.transfer %lhs to %lhs_lmem
-  {src_memory_space = "GMEM", dst_memory_space = "LMEM"}
-  : memref<16x32xf32>, memref<16x32xf32>
+  {src_memory_space = #rair.space<gmem>, dst_memory_space = #rair.space<lmem>}
+  : memref<16x32xf32>, memref<16x32xf32, #rair.space<lmem>>
 rair.transfer %rhs to %rhs_lmem
-  {src_memory_space = "GMEM", dst_memory_space = "LMEM"}
-  : memref<32x64xf32>, memref<32x64xf32>
+  {src_memory_space = #rair.space<gmem>, dst_memory_space = #rair.space<lmem>}
+  : memref<32x64xf32>, memref<32x64xf32, #rair.space<lmem>>
 
-rair.matmul ins(%lhs_lmem, %rhs_lmem : memref<16x32xf32>, memref<32x64xf32>)
-             outs(%out_lmem : memref<16x64xf32>)
+rair.matmul ins(%lhs_lmem, %rhs_lmem
+  : memref<16x32xf32, #rair.space<lmem>>,
+    memref<32x64xf32, #rair.space<lmem>>)
+  outs(%out_lmem : memref<16x64xf32, #rair.space<lmem>>)
 
 rair.transfer %out_lmem to %out
-  {src_memory_space = "LMEM", dst_memory_space = "GMEM"}
-  : memref<16x64xf32>, memref<16x64xf32>
+  {src_memory_space = #rair.space<lmem>, dst_memory_space = #rair.space<gmem>}
+  : memref<16x64xf32, #rair.space<lmem>>, memref<16x64xf32>
+
+rair.dealloc_buffer %ctx, %lhs_lmem
+  : memref<16x32xf32, #rair.space<lmem>>
+rair.dealloc_buffer %ctx, %rhs_lmem
+  : memref<32x64xf32, #rair.space<lmem>>
+rair.dealloc_buffer %ctx, %out_lmem
+  : memref<16x64xf32, #rair.space<lmem>>
 
 rair.release %ctx : !rair.context
 ```
@@ -339,14 +375,16 @@ limitations are:
   but it complicates verification and lowering contracts.
 - Optional target attributes are defined on many ops, but the upper lowering
   does not yet consistently fill legality, capability, tile, or fallback data.
-- `MemorySpace` exists as an enum, while some operations use string attributes
-  for memory spaces.
+- Function arguments and existing global buffers may still have an unspecified
+  memref memory space; explicit operation attributes carry their intended
+  placement until signature conversion is introduced.
 - `rair.launch`, `rair.herd`, and `rair.kernel` provide useful structure, but
   the current Linalg lowering mostly emits individual compute ops rather than
   wrapping accepted offload regions in launch/kernel boundaries.
-- Verification is light. Many shape, rank, layout, type, memory-space, and
-  attribute invariants are implied by lowering patterns rather than enforced by
-  op verifiers.
+- Verification covers the main compute shape contracts, explicit memory-space
+  consistency, and straight-line owned-resource lifetimes. Layout,
+  bank-capacity, byte-size, coherence, path-sensitive lifetime, alias, and
+  interprocedural invariants are not yet fully enforced.
 - Some high-level model patterns remain outside RAIR lowering, including
   arbitrary `linalg.generic`, `linalg.fill`, broadcast/map patterns, bias-add
   generics, and activation patterns.
@@ -355,12 +393,10 @@ limitations are:
 
 The next design steps should strengthen RAIR as an accelerator interface layer:
 
-1. Add verifiers for major compute ops, especially memref rank and shape
-   compatibility for matmul, batch matmul, transpose, conv, pooling, and
-   transfer.
-2. Normalize memory-space representation so allocation, transfer, and lowering
-   all use either the `MemorySpace` enum or a clearly documented string
-   convention.
+1. Extend linear lifetime verification to path-sensitive CFG, nested-region,
+   alias-aware, and interprocedural ownership analysis.
+2. Introduce function-signature conversion where explicit global-memory types
+   are required, without making existing boundary types invalid prematurely.
 3. Make upper lowering fill target attributes consistently:
    `accelerator`, `tile_size`, `dataflow`, and possibly `fallback`.
 4. Introduce a capability/profitability analysis before materializing RAIR so
@@ -369,8 +405,8 @@ The next design steps should strengthen RAIR as an accelerator interface layer:
    around individual operations, to support fusion and shared-buffer reuse.
 6. Extend pattern recognition for model-level regions such as matmul+bias,
    matmul+bias+relu, conv+relu, and pooling pipelines.
-7. Add tests that check not only operation replacement but also context
-   lifetime, memory movement placement, and backend-specific lowering.
+7. Extend tests from the current straight-line lifetime and memory placement
+   coverage to path-sensitive Core/Plan and target-lowering contracts.
 
 ## Summary
 
@@ -381,8 +417,9 @@ hidden: context ownership, memory placement, transfer scheduling,
 synchronization, target attributes, and backend lowering choices.
 
 The current implementation already supports a meaningful subset of this design:
-Linalg named ops lower to RAIR, matmul-like operations get explicit local memory
-staging, and RAIR can lower either to affine loops or to accelerator-oriented
-CIM/RISC-V intrinsic calls. The main opportunity now is to make the offload
-decision layer more explicit through verifiers, target capability metadata,
-structured launch/kernel regions, and richer pattern recognition.
+Linalg named ops lower to RAIR, matmul-like operations get explicit typed local
+memory staging, and straight-line context/buffer ownership can be verified
+before downstream work. The main opportunity now is to make the offload
+decision and RAIR Core/Plan layers more explicit through target capability
+metadata, structured launch/kernel regions, control-flow-aware ownership, and
+richer pattern recognition.

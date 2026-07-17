@@ -1,19 +1,19 @@
-//RUN: torch-mlir-opt <%s -convert-linalg-to-rair | FileCheck %s
+//RUN: torch-mlir-opt <%s -convert-linalg-to-rair -rair-verify-lifetimes | FileCheck %s
 // CHECK: func.func @forward
 // CHECK: %[[CTX:.*]] = rair.acquire {accelerator = "default"} : !rair.context
 // CHECK: %[[ALLOC:.*]] = rair.alloc : memref<16x64xf32>
 // CHECK: linalg.fill
-// CHECK: %[[LHS_LOCAL:.*]] = rair.alloc_buffer %[[CTX]] {memory_space = "LMEM"} : memref<16x32xf32>
-// CHECK: %[[RHS_LOCAL:.*]] = rair.alloc_buffer %[[CTX]] {memory_space = "LMEM"} : memref<32x64xf32>
-// CHECK: %[[OUT_LOCAL:.*]] = rair.alloc_buffer %[[CTX]] {memory_space = "LMEM"} : memref<16x64xf32>
-// CHECK: rair.transfer %arg0 to %[[LHS_LOCAL]] {dst_memory_space = "LMEM", src_memory_space = "GMEM"} : memref<16x32xf32, strided<[?, ?], offset: ?>>, memref<16x32xf32>
-// CHECK: rair.transfer %arg1 to %[[RHS_LOCAL]] {dst_memory_space = "LMEM", src_memory_space = "GMEM"} : memref<32x64xf32, strided<[?, ?], offset: ?>>, memref<32x64xf32>
-// CHECK: rair.transfer %[[ALLOC]] to %[[OUT_LOCAL]] {dst_memory_space = "LMEM", src_memory_space = "GMEM"} : memref<16x64xf32>, memref<16x64xf32>
-// CHECK: rair.matmul ins(%[[LHS_LOCAL]], %[[RHS_LOCAL]] : memref<16x32xf32>, memref<32x64xf32>) outs(%[[OUT_LOCAL]] : memref<16x64xf32>)
-// CHECK: rair.transfer %[[OUT_LOCAL]] to %[[ALLOC]] {dst_memory_space = "GMEM", src_memory_space = "LMEM"} : memref<16x64xf32>, memref<16x64xf32>
-// CHECK: rair.dealloc_buffer %[[CTX]], %[[LHS_LOCAL]] : memref<16x32xf32>
-// CHECK: rair.dealloc_buffer %[[CTX]], %[[RHS_LOCAL]] : memref<32x64xf32>
-// CHECK: rair.dealloc_buffer %[[CTX]], %[[OUT_LOCAL]] : memref<16x64xf32>
+// CHECK: %[[LHS_LOCAL:.*]] = rair.alloc_buffer %[[CTX]] {memory_space = #rair.space<lmem>} : memref<16x32xf32, #rair.space<lmem>>
+// CHECK: %[[RHS_LOCAL:.*]] = rair.alloc_buffer %[[CTX]] {memory_space = #rair.space<lmem>} : memref<32x64xf32, #rair.space<lmem>>
+// CHECK: %[[OUT_LOCAL:.*]] = rair.alloc_buffer %[[CTX]] {memory_space = #rair.space<lmem>} : memref<16x64xf32, #rair.space<lmem>>
+// CHECK: rair.transfer %arg0 to %[[LHS_LOCAL]] {dst_memory_space = #rair.space<lmem>, src_memory_space = #rair.space<gmem>} : memref<16x32xf32, strided<[?, ?], offset: ?>>, memref<16x32xf32, #rair.space<lmem>>
+// CHECK: rair.transfer %arg1 to %[[RHS_LOCAL]] {dst_memory_space = #rair.space<lmem>, src_memory_space = #rair.space<gmem>} : memref<32x64xf32, strided<[?, ?], offset: ?>>, memref<32x64xf32, #rair.space<lmem>>
+// CHECK: rair.transfer %[[ALLOC]] to %[[OUT_LOCAL]] {dst_memory_space = #rair.space<lmem>, src_memory_space = #rair.space<gmem>} : memref<16x64xf32>, memref<16x64xf32, #rair.space<lmem>>
+// CHECK: rair.matmul ins(%[[LHS_LOCAL]], %[[RHS_LOCAL]] : memref<16x32xf32, #rair.space<lmem>>, memref<32x64xf32, #rair.space<lmem>>) outs(%[[OUT_LOCAL]] : memref<16x64xf32, #rair.space<lmem>>)
+// CHECK: rair.transfer %[[OUT_LOCAL]] to %[[ALLOC]] {dst_memory_space = #rair.space<gmem>, src_memory_space = #rair.space<lmem>} : memref<16x64xf32, #rair.space<lmem>>, memref<16x64xf32>
+// CHECK: rair.dealloc_buffer %[[CTX]], %[[LHS_LOCAL]] : memref<16x32xf32, #rair.space<lmem>>
+// CHECK: rair.dealloc_buffer %[[CTX]], %[[RHS_LOCAL]] : memref<32x64xf32, #rair.space<lmem>>
+// CHECK: rair.dealloc_buffer %[[CTX]], %[[OUT_LOCAL]] : memref<16x64xf32, #rair.space<lmem>>
 // CHECK: rair.release %[[CTX]] : !rair.context
 #map = affine_map<(d0, d1) -> (d0, d1)>
 #map1 = affine_map<(d0, d1) -> (d0, d1)>

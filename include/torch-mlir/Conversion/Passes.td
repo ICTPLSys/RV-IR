@@ -183,20 +183,6 @@ def ConvertTorchToStablehlo : Pass<"convert-torch-to-stablehlo", "func::FuncOp">
 //     let dependentDialects = [ "rair::RAIRDialect", "tensor::TensorDialect"];
 // }
 
-// def ConvertCimToRiscvAffinePass : Pass<"convert-riscv-to-affine", operation="func::FuncOp"> {
-//     let summary = "Convert RISC-V dialect to Affine dialect";
-//     let constructor = "rair::createLowerToAffinePass()";
-//     let dependentDialects = [
-//         "cim::CimDialect", 
-//         "rair::RAIRDialect",
-//         "affine::AffineDialect",  
-//         "bufferization::BufferizationDialect", 
-//         "memref::MemRefDialect", 
-//         "tensor::TensorDialect"
-//     ];
-// }
-
-
 // def ConvertRAIRToLLVMPass : Pass<"convert-riscv-to-llvm", operation="func::FuncOp"> {
 //     let summary = "Convert RISC-V dialect to LLVM dialect";
 //     let constructor = "rair::createLowerToLLVMPass()";

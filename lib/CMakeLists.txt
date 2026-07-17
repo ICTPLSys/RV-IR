@@ -34,14 +34,13 @@ set(LinkedLibs
   TorchMLIRTMTensorPasses
   TorchMLIRTorchConversionPasses
   TorchMLIRTorchPasses
+  MLIRRAIRTransforms
 
   # Conversion passes.
   TorchMLIRConversionPasses
   TorchMLIRTorchOnnxToTorch
   MLIRLinalgToRISCV
-  MLIRRISCVToAffine
   MLIRRISCVToLLVM
-  MLIRRISCVToCIM
 
 )
 

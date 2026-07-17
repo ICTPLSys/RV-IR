@@ -22,7 +22,7 @@ central contribution is making accelerator interface semantics compiler-visible:
 ```text
 Torch / Linalg / Tensor IR
   -> RAIR (accelerator semantics visible here)
-  -> Affine / Async / LLVM / CIM backends
+  -> RAIR Core/Plan-aware target lowering
 ```
 
 RAIR exposes:
@@ -151,8 +151,8 @@ rair.await %ctx : !rair.context
 Allocates a memref in a selected memory space (via memref type's memory space).
 
 ```mlir
-%buf = rair.alloc : memref<1024xi32, 6>
-%spad = rair.alloc : memref<128x128xf32, 5>
+%buf = rair.alloc : memref<1024xi32, #rair.space<gmem>>
+%spad = rair.alloc : memref<128x128xf32, #rair.space<spad0>>
 ```
 
 ### `rair.dealloc`
@@ -160,7 +160,7 @@ Allocates a memref in a selected memory space (via memref type's memory space).
 Deallocates a memref.
 
 ```mlir
-rair.dealloc %buf : memref<1024xi32, 6>
+rair.dealloc %buf : memref<1024xi32, #rair.space<gmem>>
 ```
 
 ### `rair.alloc_buffer`
@@ -169,11 +169,11 @@ Allocates a buffer in accelerator-visible memory, associated with an accelerator
 context. Enables buffer lifetime analysis and memory reuse across kernels.
 
 ```mlir
-%buf_sp = rair.alloc_buffer %ctx {memory_space = "scratchpad"}
-          : memref<128x128xf32>
+%buf_sp = rair.alloc_buffer %ctx {memory_space = #rair.space<spad0>}
+          : memref<128x128xf32, #rair.space<spad0>>
 
-%buf_acc = rair.alloc_buffer %ctx {memory_space = "accumulator"}
-           : memref<64x64xf32>
+%buf_acc = rair.alloc_buffer %ctx {memory_space = #rair.space<cimc0>}
+           : memref<64x64xf32, #rair.space<cimc0>>
 ```
 
 ### `rair.dealloc_buffer`
@@ -181,7 +181,8 @@ context. Enables buffer lifetime analysis and memory reuse across kernels.
 Deallocates a buffer previously allocated in accelerator-visible memory.
 
 ```mlir
-rair.dealloc_buffer %ctx, %buf_sp : memref<128x128xf32>
+rair.dealloc_buffer %ctx, %buf_sp
+  : memref<128x128xf32, #rair.space<spad0>>
 ```
 
 ### `rair.transfer`
@@ -191,13 +192,19 @@ enables redundant transfer elimination, transfer/compute overlap, and memory
 lifetime analysis.
 
 ```mlir
-// Transfer host data to scratchpad
-rair.transfer %host_A to %spad_A
-  {src_memory_space = "host", dst_memory_space = "scratchpad"}
-  : memref<128x128xf32>, memref<128x128xf32>
+// Transfer global-memory data to scratchpad
+rair.transfer %gmem_A to %spad_A
+  {src_memory_space = #rair.space<gmem>,
+   dst_memory_space = #rair.space<spad0>}
+  : memref<128x128xf32, #rair.space<gmem>>,
+    memref<128x128xf32, #rair.space<spad0>>
 
-// Transfer result back from accelerator to host
-rair.transfer %accel_out to %host_out : memref<64x64xf32>, memref<64x64xf32>
+// Transfer result back to global memory
+rair.transfer %accel_out to %gmem_out
+  {src_memory_space = #rair.space<cimc0>,
+   dst_memory_space = #rair.space<gmem>}
+  : memref<64x64xf32, #rair.space<cimc0>>,
+    memref<64x64xf32, #rair.space<gmem>>
 ```
 
 ### `rair.load`
@@ -695,18 +702,35 @@ func.func @matmul(%A: memref<128x128xf32>, %B: memref<128x128xf32>,
 }
 ```
 
+### Linear Lifetime Verification
+
+Pass flag:
+
+```bash
+--rair-verify-lifetimes
+```
+
+This Phase 0 verifier freezes the straight-line ownership contract:
+
+- every context produced by `rair.acquire` is released exactly once;
+- every buffer produced by `rair.alloc_buffer` is deallocated exactly once;
+- allocation and deallocation use the same context SSA value;
+- contexts and buffers are not used after release;
+- borrowed function arguments are not released by the callee;
+- owned resources do not escape through calls, returns, branches, loops,
+  nested regions, or derived memref aliases.
+
+The last category currently produces an explicit unsupported diagnostic.
+Control-flow-aware, alias-aware, and interprocedural ownership are planned
+extensions rather than implicit assumptions in the current verifier.
+
 ---
 
 ## RAIR Downstream Lowering
 
-### RAIR to Affine (CPU path)
-
-```bash
---convert-rair-to-affine
-```
-
-Lowers compute ops to affine loop nests, launch/herd to nested loops, async to
-`async.execute`/`async.await`.
+The legacy RAIR-to-Affine and RAIR-to-CIM paths have been removed. New target
+lowering must consume the RAIR Core/Plan contract instead of bypassing its
+effect, dependency, and resource semantics with direct op rewrites.
 
 ### RAIR to LLVM
 
@@ -715,37 +739,18 @@ Lowers compute ops to affine loop nests, launch/herd to nested loops, async to
 ```
 
 Lowers debug ops (`rair.print`, `rair.world`) plus standard MLIR dialects to
-LLVM IR.
-
-### RAIR to CIM (accelerator path)
-
-```bash
---convert-rair-to-cim
-```
-
-Lowers compute ops to CIM hardware intrinsic calls (`llvm.riscv.vv.v.drv`,
-`llvm.riscv.conv.drv`, etc.).
+LLVM IR. It is a utility lowering, not a complete RAIR execution backend.
 
 ---
 
-## End-to-End Example
+## Front-End Example
 
-Full pipeline from Linalg to executable LLVM IR (CPU path):
-
-```bash
-torch-mlir-opt input.mlir \
-  --convert-linalg-to-rair \
-  --convert-rair-to-affine \
-  --convert-rair-to-llvm
-```
-
-Full pipeline to CIM hardware (accelerator path):
+Lower bufferized Linalg into RAIR for inspection and further Core/Plan work:
 
 ```bash
 torch-mlir-opt input.mlir \
   --convert-linalg-to-rair \
-  --convert-rair-to-cim \
-  --convert-cim-to-llvm
+  --rair-verify-lifetimes
 ```
 
 ---

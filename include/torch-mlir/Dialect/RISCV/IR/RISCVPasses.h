@@ -24,7 +24,6 @@
 
 namespace rair {
 // std::unique_ptr<mlir::Pass> createShapeInferencePass();  //形状推断pass
-    std::unique_ptr<mlir::Pass> createLowerToAffinePass();
     std::unique_ptr<mlir::Pass> createLowerToLLVMPass();
     // std::unique_ptr<mlir::Pass> createLowerLinalgToRAIRPass();
 } // namespace rair

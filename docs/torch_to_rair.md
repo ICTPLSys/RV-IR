@@ -217,35 +217,14 @@ Check that the result contains RAIR operations:
 rg "rair\\." projects/pt1/examples/mlir_output/mnist_rair_memref.mlir
 ```
 
-## Optional Downstream Lowering
+## Downstream Status
 
-Lower RAIR to affine:
+The legacy RAIR-to-Affine and RAIR-to-CIM passes have been removed. Generated
+RAIR should currently be treated as an inspectable intermediate result while
+the RAIR Core/Plan contract and its target lowering are implemented.
 
-```bash
-build/bin/torch-mlir-opt \
-  projects/pt1/examples/mlir_output/mnist_rair_memref.mlir \
-  --convert-rair-to-affine \
-  -o projects/pt1/examples/mlir_output/mnist_affine.mlir
-```
-
-Lower RAIR through affine and LLVM:
-
-```bash
-build/bin/torch-mlir-opt \
-  projects/pt1/examples/mlir_output/mnist_rair_memref.mlir \
-  --convert-rair-to-affine \
-  --convert-rair-to-llvm \
-  -o projects/pt1/examples/mlir_output/mnist_llvm.mlir
-```
-
-Lower RAIR to CIM:
-
-```bash
-build/bin/torch-mlir-opt \
-  projects/pt1/examples/mlir_output/mnist_rair_memref.mlir \
-  --convert-rair-to-cim \
-  -o projects/pt1/examples/mlir_output/mnist_cim.mlir
-```
+`--convert-rair-to-llvm` remains for utility operations such as `rair.print`
+and `rair.world`; it is not a complete compute backend.
 
 ## Useful Pass Names
 
@@ -253,8 +232,6 @@ The RAIR-related pass names are:
 
 ```text
 --convert-linalg-to-rair
---convert-rair-to-affine
---convert-rair-to-cim
 --convert-rair-to-llvm
 ```
 

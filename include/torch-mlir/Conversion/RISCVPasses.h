@@ -4,7 +4,6 @@
 
 //RISCV
 // #include "torch-mlir/Conversion/LinalgToRISCV/LinalgToRISCV.h"
-// #include "torch-mlir/Conversion/RISCVToAffine/RISCVToAffine.h"
 // #include "torch-mlir/Conversion/RISCVToLLVM/RISCVToLLVM.h"
 namespace rair {
 

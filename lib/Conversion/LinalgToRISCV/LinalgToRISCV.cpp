@@ -712,8 +712,8 @@ struct MemRefCopyToRAIRTransfer : public OpConversionPattern<memref::CopyOp> {
     rewriter.create<rair::TransferOp>(
         op.getLoc(),
         adaptor.getSource(), adaptor.getTarget(),
-        /*src_memory_space=*/mlir::StringAttr(),
-        /*dst_memory_space=*/mlir::StringAttr());
+        /*src_memory_space=*/rair::MemorySpaceAttr(),
+        /*dst_memory_space=*/rair::MemorySpaceAttr());
     rewriter.eraseOp(op);
     return success();
   }
@@ -880,37 +880,39 @@ void LinalgToRAIRLowerPass::runOnOperation() {
       auto rhsType = cast<MemRefType>(rhs.getType());
       auto outputType = cast<MemRefType>(output.getType());
 
+      auto globalMemory = rair::MemorySpaceAttr::get(
+          builder.getContext(), rair::MemorySpace::GMEM);
+      auto localMemory = rair::MemorySpaceAttr::get(
+          builder.getContext(), rair::MemorySpace::LMEM);
+
       // Create contiguous local memory types (strip strided layout)
       auto lhsLocalType = MemRefType::get(
-          lhsType.getShape(), lhsType.getElementType());
+          lhsType.getShape(), lhsType.getElementType(),
+          MemRefLayoutAttrInterface(), localMemory);
       auto rhsLocalType = MemRefType::get(
-          rhsType.getShape(), rhsType.getElementType());
+          rhsType.getShape(), rhsType.getElementType(),
+          MemRefLayoutAttrInterface(), localMemory);
       auto outputLocalType = MemRefType::get(
-          outputType.getShape(), outputType.getElementType());
+          outputType.getShape(), outputType.getElementType(),
+          MemRefLayoutAttrInterface(), localMemory);
 
       builder.setInsertionPoint(computeOp);
 
       // Allocate local memory (SRAM) buffers
       auto lhsLocal = builder.create<rair::AllocBufferOp>(
-          loc, lhsLocalType, acquireOp.getResult(),
-          builder.getStringAttr("LMEM"));
+          loc, lhsLocalType, acquireOp.getResult(), localMemory);
       auto rhsLocal = builder.create<rair::AllocBufferOp>(
-          loc, rhsLocalType, acquireOp.getResult(),
-          builder.getStringAttr("LMEM"));
+          loc, rhsLocalType, acquireOp.getResult(), localMemory);
       auto outLocal = builder.create<rair::AllocBufferOp>(
-          loc, outputLocalType, acquireOp.getResult(),
-          builder.getStringAttr("LMEM"));
+          loc, outputLocalType, acquireOp.getResult(), localMemory);
 
       // Transfer data from Global Memory to Local Memory
       builder.create<rair::TransferOp>(
-          loc, lhs, lhsLocal.getResult(),
-          builder.getStringAttr("GMEM"), builder.getStringAttr("LMEM"));
+          loc, lhs, lhsLocal.getResult(), globalMemory, localMemory);
       builder.create<rair::TransferOp>(
-          loc, rhs, rhsLocal.getResult(),
-          builder.getStringAttr("GMEM"), builder.getStringAttr("LMEM"));
+          loc, rhs, rhsLocal.getResult(), globalMemory, localMemory);
       builder.create<rair::TransferOp>(
-          loc, output, outLocal.getResult(),
-          builder.getStringAttr("GMEM"), builder.getStringAttr("LMEM"));
+          loc, output, outLocal.getResult(), globalMemory, localMemory);
 
       // Update compute op to use local memory buffers
       computeOp->setOperand(0, lhsLocal.getResult());
@@ -920,8 +922,7 @@ void LinalgToRAIRLowerPass::runOnOperation() {
       // Transfer result from Local Memory back to Global Memory
       builder.setInsertionPointAfter(computeOp);
       builder.create<rair::TransferOp>(
-          loc, outLocal.getResult(), output,
-          builder.getStringAttr("LMEM"), builder.getStringAttr("GMEM"));
+          loc, outLocal.getResult(), output, localMemory, globalMemory);
 
       // Deallocate local memory buffers
       builder.create<rair::DeallocBufferOp>(

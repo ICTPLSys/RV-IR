@@ -27,6 +27,7 @@ def RAIR_Dialect : Dialect {
     // 该设置用于激活 materializeConstant 方法，这使得可以例如 Canonicalize 优化
     let hasConstantMaterializer = 1;
     let useDefaultTypePrinterParser = 1;
+    let useDefaultAttributePrinterParser = 1;
 
 }
 
@@ -198,21 +199,31 @@ def RAIR_Context : DialectType<
   RAIR_Dialect, CPred<"llvm::isa<::rair::ContextType>($_self)">, "accelerator context type">,
              BuildableType<"::rair::ContextType::get($_builder.getContext())">;
 
-def GMEM:  I32EnumAttrCase<"GMEM", 6>;
-def SPAD0:  I32EnumAttrCase<"SPAD0", 5>;
-def SPAD1:  I32EnumAttrCase<"SPAD1", 4>;
-def SPAD2:  I32EnumAttrCase<"SPAD2", 3>;
-def SPAD3:  I32EnumAttrCase<"SPAD3", 2>;
-def CIMC0:  I32EnumAttrCase<"CIMC0", 1>;
-def LMEM:  I32EnumAttrCase<"LMEM", 0>;
+def GMEM:  I32EnumAttrCase<"GMEM", 6, "gmem">;
+def SPAD0:  I32EnumAttrCase<"SPAD0", 5, "spad0">;
+def SPAD1:  I32EnumAttrCase<"SPAD1", 4, "spad1">;
+def SPAD2:  I32EnumAttrCase<"SPAD2", 3, "spad2">;
+def SPAD3:  I32EnumAttrCase<"SPAD3", 2, "spad3">;
+def CIMC0:  I32EnumAttrCase<"CIMC0", 1, "cimc0">;
+def LMEM:  I32EnumAttrCase<"LMEM", 0, "lmem">;
 
 def MemorySpace: I32EnumAttr<"MemorySpace", "AIR Memory Space IDs",
   [GMEM,SPAD0,SPAD1,SPAD2,SPAD3,CIMC0,LMEM]> {
 
   let cppNamespace = "::rair";
+  let genSpecializedAttr = 0;
 }
 
-
+def RAIR_MemorySpaceAttr :
+    EnumAttr<RAIR_Dialect, MemorySpace, "space"> {
+  let summary = "RAIR memory space";
+  let description = [{
+    Identifies the memory domain used by a RAIR buffer or transfer endpoint.
+    The enum value is the stable numeric encoding consumed by later backends;
+    its textual form is `#rair.space<gmem>`, `#rair.space<lmem>`, and so on.
+  }];
+  let assemblyFormat = "`<` $value `>`";
+}
 
 
 

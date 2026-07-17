@@ -5,14 +5,14 @@
 // CHECK: rair.alloc
 // CHECK: rair.alloc
 // CHECK: rair.transfer
-// CHECK: rair.alloc_buffer %[[CTX]] {memory_space = "LMEM"}
-// CHECK: rair.alloc_buffer %[[CTX]] {memory_space = "LMEM"}
-// CHECK: rair.alloc_buffer %[[CTX]] {memory_space = "LMEM"}
-// CHECK: rair.transfer {{.*}} {dst_memory_space = "LMEM", src_memory_space = "GMEM"}
-// CHECK: rair.transfer {{.*}} {dst_memory_space = "LMEM", src_memory_space = "GMEM"}
-// CHECK: rair.transfer {{.*}} {dst_memory_space = "LMEM", src_memory_space = "GMEM"}
+// CHECK: rair.alloc_buffer %[[CTX]] {memory_space = #rair.space<lmem>}
+// CHECK: rair.alloc_buffer %[[CTX]] {memory_space = #rair.space<lmem>}
+// CHECK: rair.alloc_buffer %[[CTX]] {memory_space = #rair.space<lmem>}
+// CHECK: rair.transfer {{.*}} {dst_memory_space = #rair.space<lmem>, src_memory_space = #rair.space<gmem>}
+// CHECK: rair.transfer {{.*}} {dst_memory_space = #rair.space<lmem>, src_memory_space = #rair.space<gmem>}
+// CHECK: rair.transfer {{.*}} {dst_memory_space = #rair.space<lmem>, src_memory_space = #rair.space<gmem>}
 // CHECK: rair.matmul
-// CHECK: rair.transfer {{.*}} {dst_memory_space = "GMEM", src_memory_space = "LMEM"}
+// CHECK: rair.transfer {{.*}} {dst_memory_space = #rair.space<gmem>, src_memory_space = #rair.space<lmem>}
 // CHECK: rair.dealloc_buffer
 // CHECK: rair.dealloc_buffer
 // CHECK: rair.dealloc_buffer
