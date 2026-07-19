@@ -173,25 +173,4 @@ def ConvertTorchToStablehlo : Pass<"convert-torch-to-stablehlo", "func::FuncOp">
 }
 #endif
 
-//===----------------------------------------------------------------------===//
-// RISCV conversions
-//===----------------------------------------------------------------------===//
-
-// def ConvertLinalgToRAIRPass : Pass<"convert-linalg-to-riscv", operation="func::FuncOp"> {
-//     let summary = "Convert linalg to riscv dialect";
-//     let constructor = "rair::createLowerLinalgToRAIRPass()";
-//     let dependentDialects = [ "rair::RAIRDialect", "tensor::TensorDialect"];
-// }
-
-// def ConvertRAIRToLLVMPass : Pass<"convert-riscv-to-llvm", operation="func::FuncOp"> {
-//     let summary = "Convert RISC-V dialect to LLVM dialect";
-//     let constructor = "rair::createLowerToLLVMPass()";
-//     let dependentDialects = [
-//         "rair::RAIRDialect",
-//         "llvm::LLVMDialect",  
-//         "func::FuncDialect",
-//         "memref::MemRefDialect"
-//     ];
-// }
-
 #endif // TORCHMLIR_CONVERSION_PASSES

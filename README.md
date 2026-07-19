@@ -13,7 +13,7 @@
     </a>
   </p>
   <p>
-    <a href="#risc-v-dialect-design"><b>Design</b></a> |
+    <a href="#rair-dialect-design"><b>Design</b></a> |
     <a href="#development-guide"><b>Building</b></a>
   </p>
 </div>
@@ -21,19 +21,22 @@
 # RV-IR
 
 > RV-IR is a research-oriented fork of upstream torch-mlir, focusing on
-> RISC-V backends and CIM-related IR extensions.
+> RISC-V backends and RAIR accelerator-interface extensions.
 > Internally, RV-IR reuses the torch-mlir https://github.com/llvm/torch-mlir build system, tools, and
 > Python bindings.
 
-## RISC-V Dialect Design
+## RAIR Dialect Design
 
-RV-IR introduces a custom **RISCV Dialect** to model RISC-V and CIM-oriented execution semantics at the MLIR level.
+RV-IR introduces the **RAIR dialect** (Resource-Adaptive Intermediate
+Representation) to model target-neutral resource ownership, memory regions,
+movement, synchronization, and effect-preserving compute contracts. RISC-V and
+Gemmini remain the first target instance rather than part of the IR name.
 
 **Dialect design and operation specifications:**
 - https://i02plfgfarl.feishu.cn/wiki/UzuMwmKE7iKmgtkOIp1c4JhonEh
 
 This document describes:
-- Core RISCV dialect operations and type system
+- Core RAIR operations, types, attributes, and verifiers
 - Asynchronous and memory-related operations
 - Design rationale for mapping high-level ops to RISC-V backends
 - Extension points for CIM-specific instructions
@@ -145,14 +148,14 @@ pip install --pre torch-mlir torchvision \
       ```
     - **...run single test**, run:
       ```shell
-      ./bin/llvm-lit -v ../test/Conversion/RISCVToLLVM/add.mlir
+      ./bin/llvm-lit -v ../test/Dialect/RAIR/verify-lifetimes.mlir
       ```
     - **...run the Linalg-to-RAIR lowering**, run:
       ```shell
       ./bin/torch-mlir-opt \
         --convert-linalg-to-rair \
         --rair-verify-lifetimes \
-        ../test/Conversion/LinalgToRISCV/matmul.mlir
+        ../test/Conversion/LinalgToRAIR/matmul.mlir
       ```
     - **...Execute the code with LLVM interpreter**, run:
       ```shell

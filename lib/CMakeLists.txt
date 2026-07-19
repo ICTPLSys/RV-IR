@@ -27,7 +27,7 @@ set(LinkedLibs
   TorchMLIRTMTensorDialect
   TorchMLIRTorchDialect
   TorchMLIRTorchConversionDialect
-  MLIRRISCVDialect
+  MLIRRAIRDialect
   MLIRCIMDialect
 
   # Dialect passes.
@@ -39,9 +39,7 @@ set(LinkedLibs
   # Conversion passes.
   TorchMLIRConversionPasses
   TorchMLIRTorchOnnxToTorch
-  MLIRLinalgToRISCV
-  MLIRRISCVToLLVM
-
+  MLIRLinalgToRAIR
 )
 
 if(TORCH_MLIR_ENABLE_STABLEHLO)

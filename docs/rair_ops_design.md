@@ -1,15 +1,15 @@
 # RAIR Dialect Operations Reference
 
-RAIR is the **RISC-V Accelerator Interface Representation** dialect in RV-IR.
-It is implemented as an MLIR dialect with the textual namespace `rair` and the
-C++ namespace `rair`.
+RAIR is the **Resource-Adaptive Intermediate Representation** dialect in RV-IR.
+It is a target-neutral resource-effect layer with the textual namespace `rair`
+and the C++ namespace `rair`; RISC-V/Gemmini is the first target instance.
 
 Source files:
 
 ```text
-include/torch-mlir/Dialect/RISCV/IR/RISCVDialect.td
-include/torch-mlir/Dialect/RISCV/IR/RISCVOps.td
-lib/Dialect/RISCV/IR/RISCVDialect.cpp
+include/torch-mlir/Dialect/RAIR/IR/RAIRDialect.td
+include/torch-mlir/Dialect/RAIR/IR/RAIROps.td
+lib/Dialect/RAIR/IR/RAIRDialect.cpp
 ```
 
 ---
@@ -46,9 +46,17 @@ Represents completion of an asynchronous RAIR operation.
 %token = rair.wait_all async [%dep0, %dep1]
 ```
 
-### `!rair.event`
+### `!rair.event<@target>`
 
-Represents an event-style synchronization value used during lowering.
+Represents a target-aware RAIR Plan completion event.
+
+### `!rair.region`
+
+Represents an analyzable buffer slice created by `rair.view`.
+
+### `!rair.lease`
+
+Represents the linear lifetime capability returned by `rair.reserve`.
 
 ### `!rair.context`
 
@@ -66,6 +74,19 @@ rair.release %ctx : !rair.context
 
 ## Memory Spaces
 
+Core v0.1 uses only the target-neutral spellings:
+
+| Name | Value | Intended Use |
+| --- | ---: | --- |
+| `HOST` | 7 | host-visible memory |
+| `DEVICE` | 8 | device-global memory |
+| `SPAD` | 9 | explicitly managed scratchpad |
+| `ACC` | 10 | accumulator/partial-sum memory |
+| `UNKNOWN` | 11 | conservative import only; rejected by Core |
+
+The following values are pre-Core compatibility spellings and are rejected by
+the new Core op verifiers:
+
 | Name | Value | Intended Use |
 | --- | ---: | --- |
 | `LMEM` | 0 | local accelerator memory |
@@ -75,6 +96,187 @@ rair.release %ctx : !rair.context
 | `SPAD1` | 4 | scratchpad bank 1 |
 | `SPAD0` | 5 | scratchpad bank 0 |
 | `GMEM` | 6 | global memory (host DRAM) |
+
+---
+
+## Core v0.1 Operations
+
+| Operation | Contract |
+| --- | --- |
+| `rair.target` | module-level static target symbol |
+| `rair.scope` | single-block Core reference trace and lifetime boundary |
+| `rair.view` | in-bounds static zero-copy region over a typed memref |
+| `rair.reserve` | static device/spad/acc buffer plus one linear lease |
+| `rair.release_lease` | matching lease/buffer release after every use |
+| `rair.move` | equal-count, equal-element-type region copy with read/write effects |
+| `rair.compute` | one static memref `linalg.matmul` with read/read/readwrite effects |
+
+`rair.compute` retains Linalg as the compute semantic anchor. Core does not
+introduce a second matmul definition. `rair.release_lease` is intentionally
+distinct from the pre-Core context operation `rair.release` during migration.
+
+The implementation rejects dynamic shapes, out-of-bounds or negative-stride
+views, legacy memory-space spellings, unmatched or multiply-used leases,
+use-after-release, unequal move element counts, implicit element conversion,
+and non-matmul compute payloads.
+
+### `--rair-materialize-static-matmul`
+
+This independent module pass converts eligible static buffer-semantics
+`linalg.matmul` operations into Core. It does not call or change legacy
+`--convert-linalg-to-rair`.
+
+```text
+external A/B/C views
+  -> reserve A/B in SPAD and C in ACC
+  -> move A, B, and initial C into local storage
+  -> rair.compute { cloned linalg.matmul }
+  -> move C back
+  -> release C, B, A leases
+```
+
+The initial C move is semantically required because Linalg matmul accumulates
+into a ReadWrite output. The pass validates all candidates before rewriting,
+creates or reuses `rair.target @rair_default`, strips external layout from
+contiguous local buffers, and is idempotent. v0.1 accepts only rank-2 static
+memrefs in `host`/`device` space and gives each matmul its own scope; target
+selection, tiling, capacity checks, Plan IR, and backend lowering are deferred.
+
+### `--rair-infer-effects`
+
+This module-level pass reports Core effects without modifying IR. Within each
+`rair.scope`, views and actions receive deterministic textual-order IDs.
+
+| Action | Normalized footprint |
+| --- | --- |
+| `rair.reserve` | lease/buffer allocation |
+| `rair.move` | `Read(src), Write(dst)` |
+| `rair.compute` | `Read(lhs), Read(rhs), ReadWrite(output)` |
+| `rair.release_lease` | matching lease/buffer free |
+
+The pass consumes the operations' generated `MemoryEffectOpInterface` rather
+than duplicating the ODS effect declaration. Region relations are
+`disjoint`, `overlap`, or `may_overlap`. Same-base static unit-stride rectangles
+are decided from their bounds; different fresh reservations and different
+known physical spaces are disjoint; unresolved external aliasing and ambiguous
+strided intersections remain may-overlap.
+
+For two actions in reference-trace order, Read/Read is independent. Any RAW,
+WAR, or WAW pair on Overlap/MayOverlap regions creates a directed conflict
+edge. Lease edges separately encode allocate-before-use, use-before-free, and
+allocate-before-free. The report lists all raw edges and every no-edge action
+pair under `independent`; it does not perform transitive reduction or add Plan
+IR.
+
+```text
+actions:
+  a3 move effects=[read(r0), write(r3)]
+  a4 move effects=[read(r1), write(r4)]
+  a5 move effects=[read(r2), write(r5)]
+  a6 compute effects=[read(r3), read(r4), readwrite(r5)]
+  a7 move effects=[read(r5), write(r2)]
+edges:
+  a3 -> a6 memory conflict=RAW ... relation=overlap
+  a4 -> a6 memory conflict=RAW ... relation=overlap
+  a5 -> a6 memory conflict=RAW+WAW ... relation=overlap
+  a6 -> a7 memory conflict=RAW ... relation=overlap
+independent:
+  a3 || a4
+```
+
+Same-space function arguments conservatively may alias, so additional
+WAR/MayOverlap edges can appear until an explicit no-alias contract exists.
+
+#### Reusable typed graph API
+
+The pass is a thin consumer of
+`rair::RAIRStaticEffectGraph::build(rair::ScopeOp)`, declared in
+`RAIRStaticEffectGraph.h`. The immutable graph uses typed enums/structs rather
+than report strings:
+
+| API value | Meaning |
+| --- | --- |
+| `StaticOverlapKind` | Disjoint, Overlap, or MayOverlap |
+| `StaticAccessKind` | Read, Write, or ReadWrite |
+| `StaticActionKind` | Reserve, Move, Compute, or ReleaseLease |
+| `StaticMemoryConflict` | RAW/WAR/WAW bitset |
+| `StaticLifetimeConstraint` | allocate-before-use, use-before-free, or allocate-before-free |
+| `StaticEffectEdge` | ordered action pair with one or more typed reasons |
+
+IDs index stable textual-order arrays. `getRegionId`, `getActionId`,
+`getOverlap`, and `hasEdge` support consumers without exposing internal maps.
+The graph is valid only until its source scope is mutated. Report spelling and
+ordering live in `PrintEffectReport.cpp`; correctness inference lives only in
+`RAIRStaticEffectGraph.cpp`.
+
+---
+
+## Plan v0.1 Operations
+
+| Operation / attribute | Contract |
+| --- | --- |
+| `rair.plan @target` | single-block target-bound task DAG, structurally nested last in its source Scope |
+| `rair.task` | one source action descriptor with dependency events and one completion event |
+| `rair.plan_terminator` | implicit structural terminator; no completion semantics |
+| `#rair.task_kind<...>` | `reserve`, `move`, `compute`, or `release_lease` |
+
+A hand-written Plan uses function-like dependency/result types and remains
+inside its source Core scope:
+
+```mlir
+rair.scope @gemmini {
+  // ... retained Core reference trace ...
+  rair.plan @gemmini {
+    %reserve = rair.task () {
+      kind = #rair.task_kind<reserve>, source_action = 0 : i64
+    } : () -> !rair.event<@gemmini>
+    %move = rair.task (%reserve) {
+      kind = #rair.task_kind<move>, source_action = 1 : i64
+    } : (!rair.event<@gemmini>) -> !rair.event<@gemmini>
+  }
+}
+```
+
+Verifier invariants are:
+
+- every Scope has at most one Plan and it follows all Core operations;
+- the Plan is directly nested in its source Scope;
+- the Plan target resolves to `rair.target` and matches its Scope target;
+- the body contains only direct `rair.task` operations and its terminator;
+- `source_action` IDs are non-negative, unique, and dense `[0, N)` IDs matching
+  the stable action-numbering domain of the source effect graph;
+- each result and dependency is `!rair.event` for the Plan target;
+- every dependency is produced by a textually earlier task in the same Plan;
+- one task cannot list the same dependency twice.
+
+SSA provides the unique event producer, and earlier-producer/single-block rules
+provide acyclicity. Event fan-out is legal. Tasks are not `Pure`, so
+`--canonicalize --cse` preserves the schedule even when the final event is not
+yet consumed.
+
+### `--rair-materialize-plan`
+
+This module pass directly consumes `RAIRStaticEffectGraph` and materializes one
+associated Plan per Core Scope:
+
+- action `aN` becomes task `source_action = N` with the corresponding typed
+  `TaskKind`;
+- every raw edge `aI -> aJ` becomes an event dependency from task `I` to task
+  `J`;
+- dependency operands are emitted in source-action order;
+- Core views/actions/payloads remain in place as the semantic reference trace;
+- graph data is copied into a detached specification before Scope mutation;
+- all scopes are analyzed before mutation, avoiding partial module updates on
+  graph-build or stale-Plan failure.
+
+Running the pass again validates and reuses an existing Plan. Validation checks
+task count, kind-to-source-action correspondence, and the dependency set for
+every task. Operand order does not affect set equality. A mismatch is diagnosed
+as a stale Plan rather than overwritten.
+
+The pass emits all raw graph edges; it does not perform transitive reduction,
+resource-capacity or queue scheduling, expose a host completion result, define
+a runtime ABI, or invoke a backend.
 
 ---
 
@@ -654,7 +856,7 @@ Pass flag:
 --convert-linalg-to-rair
 ```
 
-Source: `lib/Conversion/LinalgToRISCV/LinalgToRISCV.cpp`
+Source: `lib/Conversion/LinalgToRAIR/LinalgToRAIR.cpp`
 
 ### Operation Mappings
 
@@ -732,14 +934,9 @@ The legacy RAIR-to-Affine and RAIR-to-CIM paths have been removed. New target
 lowering must consume the RAIR Core/Plan contract instead of bypassing its
 effect, dependency, and resource semantics with direct op rewrites.
 
-### RAIR to LLVM
-
-```bash
---convert-rair-to-llvm
-```
-
-Lowers debug ops (`rair.print`, `rair.world`) plus standard MLIR dialects to
-LLVM IR. It is a utility lowering, not a complete RAIR execution backend.
+The old debug-only `--convert-rair-to-llvm` utility has also been removed. It
+did not lower RAIR compute or resource semantics and had no RAIR-specific test
+coverage. Future target lowering starts from the Core/Plan contract.
 
 ---
 
@@ -755,7 +952,10 @@ torch-mlir-opt input.mlir \
 
 ---
 
-## Complete Operation Summary
+## Pre-Core Compatibility Operation Summary
+
+The operations below remain active only until the existing
+`--convert-linalg-to-rair` pipeline is migrated to the Core operations above.
 
 | # | Operation | Category | Description |
 |---|-----------|----------|-------------|

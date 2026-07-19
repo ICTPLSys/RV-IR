@@ -41,14 +41,13 @@
 #include "mlir/Dialect/Tosa/IR/TosaOps.h"
 #endif
 
-#include "torch-mlir/Conversion/RISCVPasses.h"
-#include "torch-mlir/Dialect/RISCV/IR/RISCVOps.h"
-#include "torch-mlir/Dialect/RISCV/IR/RISCVDialect.h"
-#include "torch-mlir/Dialect/RISCV/Transforms/RISCVPasses.h"
+#include "torch-mlir/Dialect/RAIR/IR/RAIROps.h"
+#include "torch-mlir/Dialect/RAIR/IR/RAIRDialect.h"
+#include "torch-mlir/Dialect/RAIR/Transforms/RAIRPasses.h"
 
 
 void mlir::torch::registerAllDialects(mlir::DialectRegistry &registry) {  
-  registry.insert<rair::RAIRDialect>();  //让RISCV Op合法化
+  registry.insert<rair::RAIRDialect>();
   registry.insert<mlir::bufferization::BufferizationDialect>();  
   registry.insert<mlir::func::FuncDialect>();
   registry.insert<mlir::torch::Torch::TorchDialect>();
@@ -79,9 +78,6 @@ void mlir::torch::registerAllPasses() {
 
   mlir::torch::registerConversionPasses();
   rair::registerRAIRPasses();
-  rair::registerRAIRConversionPasses();    //注册RISCV的转换Pass
-  cim::registerCIMConversionPasses();    //注册RISCV的转换Pass
-
 
   mlir::torch::onnx_c::registerTorchOnnxToTorchPasses();
   mlir::torch::TMTensor::registerPasses();

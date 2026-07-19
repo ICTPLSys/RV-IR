@@ -1,10 +1,10 @@
 add_subdirectory(TorchOnnxToTorch)
 
-set(LLVM_TARGET_DEFINITIONS RISCVPasses.td)
-mlir_tablegen(RISCVPasses.h.inc -gen-pass-decls -name RISCVConversion ${TORCH_MLIR_TABLEGEN_FLAGS})
-add_public_tablegen_target(RISCVConversionPassIncGen)
+set(LLVM_TARGET_DEFINITIONS RAIRPasses.td)
+mlir_tablegen(RAIRPasses.h.inc -gen-pass-decls -name RAIRConversion ${TORCH_MLIR_TABLEGEN_FLAGS})
+add_public_tablegen_target(RAIRConversionPassIncGen)
 
-add_mlir_doc(RISCVPasses RISCVConversionPasses ./ -gen-pass-doc)
+add_mlir_doc(RAIRPasses RAIRConversionPasses ./ -gen-pass-doc)
 
 set(LLVM_TARGET_DEFINITIONS Passes.td)
 mlir_tablegen(Passes.h.inc -gen-pass-decls ${TORCH_MLIR_TABLEGEN_FLAGS})

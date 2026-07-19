@@ -17,7 +17,7 @@
 
 #include "torch-mlir/Dialect/CIM/IR/CIMDialect.h"
 #include "torch-mlir/Dialect/CIM/IR/CIMOps.h"
-#include "torch-mlir/Conversion/RISCVPasses.h"
+#include "torch-mlir/Conversion/RAIRPasses.h"
 // #include "torch-mlir/Conversion/Passes.h"
 
 #include "mlir/Conversion/AffineToStandard/AffineToStandard.h"

@@ -206,17 +206,17 @@ The following commands were run from the repository root:
 
 ```bash
 ninja -C build torch-mlir-opt
-build/bin/llvm-lit -sv test/Conversion/LinalgToRISCV
+build/bin/llvm-lit -sv test/Conversion/LinalgToRAIR
 build/bin/torch-mlir-opt projects/pt1/examples/mlir_output/matmul_linalg_memref.mlir --convert-linalg-to-rair -o /tmp/rair_motivation_matmul_after_patch.mlir
 build/bin/torch-mlir-opt projects/pt1/examples/mlir_output/mnist_linalg_memref.mlir --convert-linalg-to-rair -o /tmp/rair_motivation_mnist_after_patch.mlir
 build/bin/torch-mlir-opt projects/pt1/examples/mlir_output/resnet_simple_memref.mlir --convert-linalg-to-rair -o /tmp/rair_motivation_resnet_simple_after_patch.mlir
-build/bin/torch-mlir-opt test/Conversion/LinalgToRISCV/conv2d.mlir --convert-linalg-to-rair -o /tmp/rair_motivation_conv2d.mlir
+build/bin/torch-mlir-opt test/Conversion/LinalgToRAIR/conv2d.mlir --convert-linalg-to-rair -o /tmp/rair_motivation_conv2d.mlir
 ```
 
 Test result:
 
 ```text
-test/Conversion/LinalgToRISCV: 13/13 passed
+test/Conversion/LinalgToRAIR: 13/13 passed
 ```
 
 Operation counts before and after `--convert-linalg-to-rair`:

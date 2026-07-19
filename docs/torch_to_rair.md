@@ -169,7 +169,7 @@ python projects/pt1/examples/resnet_simple_to_linalg.py \
 ### 2. Materialize Bufferized Linalg/MemRef IR
 
 The current RAIR lowering patterns expect the memref-oriented linalg form used
-by the RISCV/RAIR tests.
+by the RAIR conversion tests.
 
 MNIST:
 
@@ -223,8 +223,9 @@ The legacy RAIR-to-Affine and RAIR-to-CIM passes have been removed. Generated
 RAIR should currently be treated as an inspectable intermediate result while
 the RAIR Core/Plan contract and its target lowering are implemented.
 
-`--convert-rair-to-llvm` remains for utility operations such as `rair.print`
-and `rair.world`; it is not a complete compute backend.
+The old debug-only `--convert-rair-to-llvm` utility has been removed because it
+did not lower RAIR compute or resource semantics. A new execution backend must
+consume the Core/Plan contract.
 
 ## Useful Pass Names
 
@@ -232,7 +233,6 @@ The RAIR-related pass names are:
 
 ```text
 --convert-linalg-to-rair
---convert-rair-to-llvm
 ```
 
 Confirm them with:

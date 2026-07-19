@@ -4,8 +4,7 @@ add_subdirectory(TorchToLinalg)
 add_subdirectory(TorchToSCF)
 add_subdirectory(TorchToTensor)
 
-add_subdirectory(LinalgToRISCV)
-add_subdirectory(RISCVToLLVM)
+add_subdirectory(LinalgToRAIR)
 add_subdirectory(CIMToLLVM)
 
 
@@ -27,8 +26,7 @@ set(linked_libs TorchMLIRTorchToArith
                 TorchMLIRTorchToTMTensor
                 TorchMLIRTorchConversionToMLProgram
                 TorchMLIRConversionUtils
-                MLIRLinalgToRISCV
-                MLIRRISCVToLLVM
+                MLIRLinalgToRAIR
                 MLIRCIMToLLVM
                 )
 if(TORCH_MLIR_ENABLE_STABLEHLO)

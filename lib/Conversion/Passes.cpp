@@ -25,14 +25,13 @@
 #include "torch-mlir/Conversion/TorchToTosa/TorchToTosa.h"
 #endif // TORCH_MLIR_ENABLE_TOSA
 
-#include "torch-mlir/Conversion/LinalgToRISCV/LinalgToRISCV.h"
-#include "torch-mlir/Conversion/RISCVToLLVM/RISCVToLLVM.h"
+#include "torch-mlir/Conversion/LinalgToRAIR/LinalgToRAIR.h"
 #include "torch-mlir/Conversion/CIMToLLVM/CIMToLLVM.h"
 
-#include "torch-mlir/Dialect/RISCV/IR/RISCVOps.h"
+#include "torch-mlir/Dialect/RAIR/IR/RAIROps.h"
 #include "torch-mlir/Dialect/CIM/IR/CIMOps.h"
 
-#include "torch-mlir/Conversion/RISCVPasses.h"
+#include "torch-mlir/Conversion/RAIRPasses.h"
 
 
 //===----------------------------------------------------------------------===//
@@ -41,7 +40,7 @@
 
 namespace {
 #define GEN_PASS_REGISTRATION
-#include "torch-mlir/Conversion/RISCVPasses.h.inc"
+#include "torch-mlir/Conversion/RAIRPasses.h.inc"
 #define GEN_PASS_REGISTRATION
 #include "torch-mlir/Conversion/Passes.h.inc"
 #define GEN_PASS_DEF_LINALGBUFFERIZE
@@ -52,9 +51,7 @@ namespace {
 
 namespace rair {
 void registerRAIRConversionPasses() {
-  // 注册RISCV相关的转换Pass
-  registerConvertLinalgToRAIRPass();  
-  registerConvertRAIRToLLVMPass();   
+  registerConvertLinalgToRAIRPass();
 }
 } // namespace rair
 
@@ -70,4 +67,3 @@ void mlir::torch::registerConversionPasses() {
     cim::registerCIMConversionPasses();  
     ::registerPasses(); 
 }
-
